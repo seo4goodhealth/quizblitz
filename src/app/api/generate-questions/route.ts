@@ -1,24 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getBankQuestions } from '@/lib/question-bank'
 
 async function callAI(systemPrompt: string, userPrompt: string): Promise<string | null> {
-  // Try OpenAI first (works on Vercel, cPanel, any hosting)
-  const openaiKey = process.env.OPENAI_API_KEY
-  if (openaiKey) {
-    const { default: OpenAI } = await import('openai')
-    const openai = new OpenAI({ apiKey: openaiKey })
-    const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.8,
-      max_tokens: 4000,
-    })
-    return completion.choices[0]?.message?.content || null
+  // 1. Try Google Gemini (FREE - 15 requests/minute, no credit card)
+  const geminiKey = process.env.GEMINI_API_KEY
+  if (geminiKey) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              { role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }
+            ],
+            generationConfig: {
+              temperature: 0.8,
+              maxOutputTokens: 4000,
+            },
+          }),
+        }
+      )
+      const data = await response.json()
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+      if (text) return text
+    } catch (e) {
+      console.error('Gemini API error:', e)
+    }
   }
 
-  // Fallback: try z-ai-web-dev-sdk (works in this dev environment)
+  // 2. Try OpenAI (paid, but user may have a key)
+  const openaiKey = process.env.OPENAI_API_KEY
+  if (openaiKey) {
+    try {
+      const { default: OpenAI } = await import('openai')
+      const openai = new OpenAI({ apiKey: openaiKey })
+      const completion = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.8,
+        max_tokens: 4000,
+      })
+      return completion.choices[0]?.message?.content || null
+    } catch (e) {
+      console.error('OpenAI API error:', e)
+    }
+  }
+
+  // 3. Try z-ai-web-dev-sdk (works in this dev environment)
   try {
     const ZAI = (await import('z-ai-web-dev-sdk')).default
     const zai = await ZAI.create()
@@ -44,9 +77,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Category is required' }, { status: 400 })
     }
 
-    const systemPrompt = 'You are a quiz question generator. You generate high-quality, accurate multiple choice questions. You always respond with valid JSON only, no markdown or extra text.'
+    // STEP 1: Try AI generation first (if any API key is configured)
+    const hasAI = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY
 
-    const userPrompt = `Generate ${count} multiple choice quiz questions about "${category}". 
+    if (hasAI) {
+      const systemPrompt = 'You are a quiz question generator. You generate high-quality, accurate multiple choice questions. You always respond with valid JSON only, no markdown or extra text.'
+
+      const userPrompt = `Generate ${count} multiple choice quiz questions about "${category}". 
 Difficulty level: ${difficulty}.
 
 IMPORTANT: Return ONLY a valid JSON array with no other text. Each question must have this exact structure:
@@ -70,40 +107,50 @@ Rules:
 - timeLimit should be between 10-30 seconds based on difficulty
 - Return ONLY the JSON array, no markdown, no explanation`
 
-    const content = await callAI(systemPrompt, userPrompt)
+      const content = await callAI(systemPrompt, userPrompt)
 
-    if (!content) {
+      if (content) {
+        try {
+          const jsonMatch = content.match(/\[[\s\S]*\]/)
+          const jsonStr = jsonMatch ? jsonMatch[0] : content
+          const questions = JSON.parse(jsonStr)
+
+          const validatedQuestions = questions.map((q: any, i: number) => ({
+            id: `q_${Date.now()}_${i}`,
+            text: q.text || '',
+            optionA: q.optionA || '',
+            optionB: q.optionB || '',
+            optionC: q.optionC || '',
+            optionD: q.optionD || '',
+            correctAnswer: q.correctAnswer || 'optionA',
+            timeLimit: q.timeLimit || 15,
+            order: i
+          }))
+
+          return NextResponse.json({ questions: validatedQuestions, source: 'ai' })
+        } catch (e) {
+          console.error('Failed to parse AI response, falling back to bank')
+        }
+      }
+    }
+
+    // STEP 2: Fall back to built-in question bank (FREE, no API needed)
+    const bankQuestions = getBankQuestions(category, count)
+
+    if (bankQuestions.length > 0) {
       return NextResponse.json({ 
-        error: 'AI service not configured. Please set the OPENAI_API_KEY environment variable.' 
-      }, { status: 500 })
+        questions: bankQuestions, 
+        source: 'bank',
+        note: hasAI ? undefined : 'Using built-in questions. Set GEMINI_API_KEY (free) for AI-generated questions.'
+      })
     }
 
-    // Parse the JSON response
-    let questions
-    try {
-      // Try to extract JSON from potential markdown code blocks
-      const jsonMatch = content.match(/\[[\s\S]*\]/)
-      const jsonStr = jsonMatch ? jsonMatch[0] : content
-      questions = JSON.parse(jsonStr)
-    } catch (e) {
-      console.error('Failed to parse AI response:', content)
-      return NextResponse.json({ error: 'Failed to parse generated questions', raw: content }, { status: 500 })
-    }
+    // STEP 3: No questions available at all
+    return NextResponse.json({ 
+      error: 'No questions available for this category. Please try another category or set up a free Gemini API key at https://aistudio.google.com/apikey',
+      hasAI: false 
+    }, { status: 404 })
 
-    // Validate and format questions
-    const validatedQuestions = questions.map((q: any, i: number) => ({
-      id: `q_${Date.now()}_${i}`,
-      text: q.text || '',
-      optionA: q.optionA || '',
-      optionB: q.optionB || '',
-      optionC: q.optionC || '',
-      optionD: q.optionD || '',
-      correctAnswer: q.correctAnswer || 'optionA',
-      timeLimit: q.timeLimit || 15,
-      order: i
-    }))
-
-    return NextResponse.json({ questions: validatedQuestions })
   } catch (error: any) {
     console.error('Generate questions error:', error)
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
