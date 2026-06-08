@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBankQuestions } from '@/lib/question-bank'
 
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: 'English',
+  es: 'Spanish (Español)',
+  ro: 'Romanian (Română)',
+  ca: 'Catalan (Català)',
+  it: 'Italian (Italiano)',
+  fr: 'French (Français)',
+}
+
 async function callAI(systemPrompt: string, userPrompt: string): Promise<string | null> {
   // 1. Try DeepSeek (super cheap, works globally, OpenAI-compatible)
   const deepseekKey = process.env.DEEPSEEK_API_KEY
@@ -97,31 +106,90 @@ async function callAI(systemPrompt: string, userPrompt: string): Promise<string 
   }
 }
 
+async function translateQuestionsWithAI(questions: any[], targetLanguage: string): Promise<any[]> {
+  const langName = LANGUAGE_NAMES[targetLanguage] || targetLanguage
+  const systemPrompt = `You are a professional translator. You translate quiz questions accurately while keeping the meaning and educational value. You always respond with valid JSON only, no markdown or extra text.`
+
+  const questionsJson = JSON.stringify(questions.map(q => ({
+    text: q.text,
+    optionA: q.optionA,
+    optionB: q.optionB,
+    optionC: q.optionC,
+    optionD: q.optionD,
+  })))
+
+  const userPrompt = `Translate the following quiz questions to ${langName}. Keep the correctAnswer field the same (don't change optionA/optionB/optionC/optionD keys). Translate ONLY the text, optionA, optionB, optionC, and optionD values.
+
+IMPORTANT: Return ONLY a valid JSON array with the same structure, no markdown, no explanation:
+[
+  {
+    "text": "translated question",
+    "optionA": "translated option A",
+    "optionB": "translated option B",
+    "optionC": "translated option C",
+    "optionD": "translated option D"
+  }
+]
+
+Questions to translate:
+${questionsJson}`
+
+  const content = await callAI(systemPrompt, userPrompt)
+  if (!content) return questions
+
+  try {
+    const jsonMatch = content.match(/\[[\s\S]*\]/)
+    const jsonStr = jsonMatch ? jsonMatch[0] : content
+    const translated = JSON.parse(jsonStr)
+
+    return questions.map((q, i) => {
+      if (translated[i]) {
+        return {
+          ...q,
+          text: translated[i].text || q.text,
+          optionA: translated[i].optionA || q.optionA,
+          optionB: translated[i].optionB || q.optionB,
+          optionC: translated[i].optionC || q.optionC,
+          optionD: translated[i].optionD || q.optionD,
+        }
+      }
+      return q
+    })
+  } catch (e) {
+    console.error('Failed to parse translation, returning original questions', e)
+    return questions
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { category, count = 10, difficulty = 'mixed' } = await req.json()
+    const { category, count = 10, difficulty = 'mixed', locale = 'en' } = await req.json()
 
     if (!category) {
       return NextResponse.json({ error: 'Category is required' }, { status: 400 })
     }
 
+    const targetLanguage = LANGUAGE_NAMES[locale] || LANGUAGE_NAMES.en
+    const isNonEnglish = locale !== 'en'
+
     // STEP 1: Try AI generation first (if any API key is configured)
     const hasAI = process.env.DEEPSEEK_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY
 
     if (hasAI) {
-      const systemPrompt = 'You are a quiz question generator. You generate high-quality, accurate multiple choice questions. You always respond with valid JSON only, no markdown or extra text.'
+      const systemPrompt = `You are a quiz question generator. You generate high-quality, accurate multiple choice questions. You always respond with valid JSON only, no markdown or extra text. You generate questions in ${targetLanguage}.`
 
       const userPrompt = `Generate ${count} multiple choice quiz questions about "${category}". 
 Difficulty level: ${difficulty}.
+Language: ${targetLanguage}. ALL questions and options MUST be written in ${targetLanguage}.
 
 IMPORTANT: Return ONLY a valid JSON array with no other text. Each question must have this exact structure:
 [
   {
-    "text": "The question text",
-    "optionA": "First option",
-    "optionB": "Second option", 
-    "optionC": "Third option",
-    "optionD": "Fourth option",
+    "text": "The question text in ${targetLanguage}",
+    "optionA": "First option in ${targetLanguage}",
+    "optionB": "Second option in ${targetLanguage}", 
+    "optionC": "Third option in ${targetLanguage}",
+    "optionD": "Fourth option in ${targetLanguage}",
     "correctAnswer": "optionA",
     "timeLimit": 15
   }
@@ -133,6 +201,7 @@ Rules:
 - Questions should be interesting and challenging
 - For Bible Quiz category, use accurate biblical references
 - timeLimit should be between 10-30 seconds based on difficulty
+- ALL text MUST be in ${targetLanguage}
 - Return ONLY the JSON array, no markdown, no explanation`
 
       const content = await callAI(systemPrompt, userPrompt)
@@ -166,9 +235,19 @@ Rules:
     const bankQuestions = getBankQuestions(category, count)
 
     if (bankQuestions.length > 0) {
+      // If non-English and AI is available, translate the bank questions
+      let finalQuestions = bankQuestions
+      if (isNonEnglish && hasAI) {
+        try {
+          finalQuestions = await translateQuestionsWithAI(bankQuestions, locale)
+        } catch (e) {
+          console.error('Translation failed, returning English questions')
+        }
+      }
+
       return NextResponse.json({ 
-        questions: bankQuestions, 
-        source: 'bank',
+        questions: finalQuestions, 
+        source: isNonEnglish && hasAI ? 'bank-translated' : 'bank',
         note: hasAI ? undefined : 'Using built-in questions. Add a DEEPSEEK_API_KEY for unlimited AI-generated questions.'
       })
     }

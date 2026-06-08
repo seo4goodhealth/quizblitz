@@ -489,6 +489,7 @@ export default function QuizBlitzApp() {
           category: CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory,
           count: questionCount,
           difficulty,
+          locale,
         }),
       })
       const data = await res.json()
