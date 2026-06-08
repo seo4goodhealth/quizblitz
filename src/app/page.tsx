@@ -717,6 +717,48 @@ export default function QuizBlitzApp() {
             </div>
           )}
 
+          {/* Saved Quizzes on Homepage */}
+          {session?.user && savedQuizzes.length > 0 && (
+            <div className="w-full max-w-md mb-6 animate-slide-up" style={{ animationDelay: '0.05s' }}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <Bookmark className="w-5 h-5 text-yellow-400" /> My Quizzes
+                </h3>
+                <Button variant="ghost" size="sm" onClick={() => { if (playerName.trim()) setView('create') }} className="text-purple-400 hover:text-purple-300 text-xs">
+                  View All <ChevronRight className="w-3 h-3 ml-0.5" />
+                </Button>
+              </div>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {savedQuizzes.slice(0, 5).map((q) => {
+                  const catIcon = CATEGORIES.find(c => c.name === q.categoryName)?.icon || BookOpen
+                  const CatIcon = catIcon
+                  return (
+                    <div key={q.id} className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3 hover:bg-white/8 transition-colors cursor-pointer group"
+                      onClick={async () => {
+                        await loadSavedQuiz(q.id)
+                        if (playerName.trim()) setView('create')
+                      }}>
+                      <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shrink-0">
+                        <CatIcon className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-medium text-sm truncate">{q.name}</p>
+                        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                          <span>{q.categoryName}</span>
+                          <span>•</span>
+                          <span>{q.questionCount} Qs</span>
+                          <span>•</span>
+                          <span>{q.difficulty}</span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-purple-400 transition-colors shrink-0" />
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="w-full max-w-md space-y-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
             <Input
               value={playerName}
