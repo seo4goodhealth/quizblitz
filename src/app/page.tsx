@@ -23,6 +23,7 @@ import {
   Heart, Star, Swords, Award, Mic2, Laptop, Mountain, Shield,
   Monitor, Bookmark, LogOut, User, FolderOpen,
 } from 'lucide-react'
+import { useI18n, LANGUAGES } from '@/lib/i18n'
 
 // ==================== TYPES ====================
 interface Question {
@@ -86,9 +87,53 @@ const CATEGORIES = [
   { id: 'travel', name: 'Travel & Landmarks', icon: Mountain, color: 'from-cyan-400 to-cyan-600' },
 ]
 
+// ==================== LANGUAGE SELECTOR COMPONENT ====================
+function LanguageSelector({ compact = false }: { compact?: boolean }) {
+  const { locale, setLocale, t } = useI18n()
+  if (compact) {
+    return (
+      <div className="flex items-center gap-1">
+        {LANGUAGES.map((lang) => (
+          <button
+            key={lang.code}
+            onClick={() => setLocale(lang.code)}
+            className={`px-1.5 py-0.5 rounded text-xs transition-all ${
+              locale === lang.code
+                ? 'bg-purple-600/30 text-purple-300 ring-1 ring-purple-500/50'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+            }`}
+            title={lang.name}
+          >
+            {lang.flag}
+          </button>
+        ))}
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-1.5">
+      {LANGUAGES.map((lang) => (
+        <button
+          key={lang.code}
+          onClick={() => setLocale(lang.code)}
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            locale === lang.code
+              ? 'bg-purple-600/30 text-white ring-1 ring-purple-500/50'
+              : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+          }`}
+        >
+          <span>{lang.flag}</span>
+          <span>{lang.name}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // ==================== MAIN APP ====================
 export default function QuizBlitzApp() {
   const { data: session, status: sessionStatus } = useSession()
+  const { t, tc, locale, setLocale } = useI18n()
 
   // View state
   const [view, setView] = useState<GameView>('home')
@@ -163,12 +208,12 @@ export default function QuizBlitzApp() {
     try {
       if (authMode === 'register') {
         if (!authEmail || !authName || !authPassword) {
-          setAuthError('All fields are required')
+          setAuthError(t('auth.allFieldsRequired'))
           setAuthLoading(false)
           return
         }
         if (authPassword.length < 6) {
-          setAuthError('Password must be at least 6 characters')
+          setAuthError(t('auth.passwordMin'))
           setAuthLoading(false)
           return
         }
@@ -187,13 +232,13 @@ export default function QuizBlitzApp() {
         await signIn('credentials', { email: authEmail, password: authPassword, redirect: false })
       } else {
         if (!authEmail || !authPassword) {
-          setAuthError('Email and password are required')
+          setAuthError(t('auth.emailPasswordRequired'))
           setAuthLoading(false)
           return
         }
         const result = await signIn('credentials', { email: authEmail, password: authPassword, redirect: false })
         if (result?.error) {
-          setAuthError('Invalid email or password')
+          setAuthError(t('auth.invalidCredentials'))
           setAuthLoading(false)
           return
         }
@@ -204,7 +249,7 @@ export default function QuizBlitzApp() {
       setAuthName('')
       setAuthError('')
     } catch (err) {
-      setAuthError('Something went wrong. Please try again.')
+      setAuthError(t('auth.somethingWrong'))
     } finally {
       setAuthLoading(false)
     }
@@ -216,7 +261,7 @@ export default function QuizBlitzApp() {
     setIsSavingQuiz(true)
     setSaveSuccess(false)
     try {
-      const name = saveQuizName || `${CATEGORIES.find(c => c.id === selectedCategory)?.name || 'Quiz'} - ${new Date().toLocaleDateString()}`
+      const name = saveQuizName || `${tc(selectedCategory) || 'Quiz'} - ${new Date().toLocaleDateString()}`
       const res = await fetch('/api/quizzes/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -601,39 +646,39 @@ export default function QuizBlitzApp() {
         <DialogContent className="bg-gray-900 border-white/10 text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white text-xl">
-              {authMode === 'login' ? 'Sign In' : 'Create Account'}
+              {authMode === 'login' ? t('auth.signIn') : t('auth.createAccount')}
             </DialogTitle>
             <DialogDescription className="text-gray-400">
-              {authMode === 'login' ? 'Sign in to save and load quizzes' : 'Create an account to save your quizzes'}
+              {authMode === 'login' ? t('auth.signInDesc') : t('auth.createDesc')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             {authMode === 'register' && (
               <div>
-                <Label className="text-gray-300 mb-1 block">Name</Label>
+                <Label className="text-gray-300 mb-1 block">{t('auth.name')}</Label>
                 <Input value={authName} onChange={(e) => setAuthName(e.target.value)}
-                  placeholder="Your name" className="bg-white/5 border-white/10 text-white" />
+                  placeholder={t('auth.namePlaceholder')} className="bg-white/5 border-white/10 text-white" />
               </div>
             )}
             <div>
-              <Label className="text-gray-300 mb-1 block">Email</Label>
+              <Label className="text-gray-300 mb-1 block">{t('auth.email')}</Label>
               <Input value={authEmail} onChange={(e) => setAuthEmail(e.target.value)}
-                type="email" placeholder="you@example.com" className="bg-white/5 border-white/10 text-white" />
+                type="email" placeholder={t('auth.emailPlaceholder')} className="bg-white/5 border-white/10 text-white" />
             </div>
             <div>
-              <Label className="text-gray-300 mb-1 block">Password</Label>
+              <Label className="text-gray-300 mb-1 block">{t('auth.password')}</Label>
               <Input value={authPassword} onChange={(e) => setAuthPassword(e.target.value)}
-                type="password" placeholder="••••••••" className="bg-white/5 border-white/10 text-white"
+                type="password" placeholder={t('auth.passwordPlaceholder')} className="bg-white/5 border-white/10 text-white"
                 onKeyDown={(e) => e.key === 'Enter' && handleAuth()} />
             </div>
             {authError && <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-2 rounded text-sm text-center">{authError}</div>}
             <Button onClick={handleAuth} disabled={authLoading} className="w-full h-11 font-bold bg-gradient-to-r from-quiz-purple to-quiz-blue text-white">
-              {authLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{authMode === 'login' ? 'Signing in...' : 'Creating account...'}</> : authMode === 'login' ? 'Sign In' : 'Create Account'}
+              {authLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{authMode === 'login' ? t('auth.signingIn') : t('auth.creatingAccount')}</> : authMode === 'login' ? t('auth.signIn') : t('auth.createAccount')}
             </Button>
             <p className="text-center text-sm text-gray-400">
-              {authMode === 'login' ? "Don't have an account? " : "Already have an account? "}
+              {authMode === 'login' ? t('auth.noAccount') : t('auth.hasAccount')}
               <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError('') }} className="text-purple-400 hover:text-purple-300 underline">
-                {authMode === 'login' ? 'Sign up' : 'Sign in'}
+                {authMode === 'login' ? t('auth.signUp') : t('auth.signIn')}
               </button>
             </p>
           </div>
@@ -645,31 +690,31 @@ export default function QuizBlitzApp() {
         <DialogContent className="bg-gray-900 border-white/10 text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white text-xl flex items-center gap-2">
-              <Monitor className="w-5 h-5 text-purple-400" /> Cast to TV
+              <Monitor className="w-5 h-5 text-purple-400" /> {t('cast.title')}
             </DialogTitle>
             <DialogDescription className="text-gray-400">
-              Display the quiz on a big screen for everyone to see
+              {t('cast.subtitle')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
             <Button onClick={openTVMode} className="w-full h-12 text-lg font-bold bg-gradient-to-r from-quiz-purple to-quiz-blue text-white">
-              <Monitor className="w-5 h-5 mr-2" /> Open TV Display
+              <Monitor className="w-5 h-5 mr-2" /> {t('cast.openTVDisplay')}
             </Button>
-            <p className="text-gray-400 text-sm text-center">Opens a full-screen display in a new window</p>
+            <p className="text-gray-400 text-sm text-center">{t('cast.tvDisplayDesc')}</p>
             <Separator className="bg-white/10" />
             <div className="space-y-3">
-              <h4 className="text-white font-semibold text-sm">Other ways to cast:</h4>
+              <h4 className="text-white font-semibold text-sm">{t('cast.otherWays')}</h4>
               <div className="bg-white/5 p-3 rounded-lg">
-                <p className="text-white font-medium text-sm mb-1">Chromecast</p>
-                <p className="text-gray-400 text-xs">Open TV Display first, then click the Cast icon in Chrome browser to cast the tab to your TV</p>
+                <p className="text-white font-medium text-sm mb-1">{t('cast.chromecast')}</p>
+                <p className="text-gray-400 text-xs">{t('cast.chromecastDesc')}</p>
               </div>
               <div className="bg-white/5 p-3 rounded-lg">
-                <p className="text-white font-medium text-sm mb-1">AirPlay (Safari/iOS)</p>
-                <p className="text-gray-400 text-xs">Open TV Display on your iPhone/iPad, then use Screen Mirroring to your Apple TV</p>
+                <p className="text-white font-medium text-sm mb-1">{t('cast.airplay')}</p>
+                <p className="text-gray-400 text-xs">{t('cast.airplayDesc')}</p>
               </div>
               <div className="bg-white/5 p-3 rounded-lg">
-                <p className="text-white font-medium text-sm mb-1">HDMI Cable</p>
-                <p className="text-gray-400 text-xs">Connect your laptop directly to a TV or projector with an HDMI cable</p>
+                <p className="text-white font-medium text-sm mb-1">{t('cast.hdmi')}</p>
+                <p className="text-gray-400 text-xs">{t('cast.hdmiDesc')}</p>
               </div>
             </div>
           </div>
@@ -683,12 +728,12 @@ export default function QuizBlitzApp() {
             <div className="flex items-center justify-center gap-3 mb-4">
               <Zap className="w-12 h-12 text-yellow-400" />
               <h1 className="text-5xl md:text-7xl font-black bg-gradient-to-r from-yellow-400 via-red-400 to-purple-500 bg-clip-text text-transparent">
-                QuizBlitz
+                {t('app.title')}
               </h1>
               <Zap className="w-12 h-12 text-yellow-400" />
             </div>
             <p className="text-xl text-gray-400 max-w-md mx-auto">
-              Create live quiz games, compete in real-time, and dominate the leaderboard!
+              {t('app.tagline')}
             </p>
           </div>
 
@@ -712,7 +757,7 @@ export default function QuizBlitzApp() {
             <div className="w-full max-w-md mb-4 animate-slide-up">
               <Button variant="outline" onClick={() => { setAuthMode('login'); setShowAuthModal(true) }}
                 className="w-full border-white/10 text-gray-400 hover:text-white hover:border-white/20 h-10">
-                <User className="w-4 h-4 mr-2" /> Sign in to save quizzes
+                <User className="w-4 h-4 mr-2" /> {t('home.signIn')}
               </Button>
             </div>
           )}
@@ -722,10 +767,10 @@ export default function QuizBlitzApp() {
             <div className="w-full max-w-md mb-6 animate-slide-up" style={{ animationDelay: '0.05s' }}>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <Bookmark className="w-5 h-5 text-yellow-400" /> My Quizzes
+                  <Bookmark className="w-5 h-5 text-yellow-400" /> {t('home.myQuizzes')}
                 </h3>
                 <Button variant="ghost" size="sm" onClick={() => { if (playerName.trim()) setView('create') }} className="text-purple-400 hover:text-purple-300 text-xs">
-                  View All <ChevronRight className="w-3 h-3 ml-0.5" />
+                  {t('home.viewAll')} <ChevronRight className="w-3 h-3 ml-0.5" />
                 </Button>
               </div>
               <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -763,7 +808,7 @@ export default function QuizBlitzApp() {
             <Input
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
-              placeholder="Enter your nickname..."
+              placeholder={t('home.nickname')}
               className="h-14 text-lg bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-purple-500"
               maxLength={20}
             />
@@ -774,7 +819,7 @@ export default function QuizBlitzApp() {
               className="w-full h-16 text-xl font-bold bg-gradient-to-r from-quiz-red to-quiz-orange hover:from-quiz-red hover:to-quiz-red text-white shadow-lg shadow-red-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <Plus className="w-6 h-6 mr-2" />
-              Create Game
+              {t('home.createGame')}
             </Button>
 
             <Button
@@ -783,8 +828,13 @@ export default function QuizBlitzApp() {
               className="w-full h-16 text-xl font-bold bg-gradient-to-r from-quiz-blue to-quiz-purple hover:from-quiz-blue hover:to-quiz-blue text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <LogIn className="w-6 h-6 mr-2" />
-              Join Game
+              {t('home.joinGame')}
             </Button>
+          </div>
+
+          {/* Language Selector on Home */}
+          <div className="w-full max-w-md mt-6 animate-slide-up" style={{ animationDelay: '0.15s' }}>
+            <LanguageSelector />
           </div>
         </div>
       )}
@@ -793,21 +843,24 @@ export default function QuizBlitzApp() {
       {view === 'create' && (
         <div className="flex-1 p-4 md:p-8 overflow-y-auto">
           <div className="max-w-4xl mx-auto">
-            <Button variant="ghost" onClick={() => { setView('home'); setQuestions([]) }} className="mb-4 text-gray-400 hover:text-white">
-              <ArrowLeft className="w-4 h-4 mr-2" /> Back
-            </Button>
+            <div className="flex items-center justify-between mb-4">
+              <Button variant="ghost" onClick={() => { setView('home'); setQuestions([]) }} className="text-gray-400 hover:text-white">
+                <ArrowLeft className="w-4 h-4 mr-2" /> {t('create.back')}
+              </Button>
+              <LanguageSelector compact />
+            </div>
 
-            <h2 className="text-3xl font-bold text-white mb-2">Create a Game</h2>
-            <p className="text-gray-400 mb-6">Pick a category, auto-generate questions, then customize anything you want.</p>
+            <h2 className="text-3xl font-bold text-white mb-2">{t('create.title')}</h2>
+            <p className="text-gray-400 mb-6">{t('create.subtitle')}</p>
 
             {/* Tabs for Create / Saved Quizzes */}
             <Tabs defaultValue="create" className="mb-6">
               <TabsList className="bg-white/5 border border-white/10">
                 <TabsTrigger value="create" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-gray-400">
-                  <Sparkles className="w-4 h-4 mr-1" /> Create New
+                  <Sparkles className="w-4 h-4 mr-1" /> {t('create.createNew')}
                 </TabsTrigger>
                 <TabsTrigger value="saved" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-gray-400" disabled={!session?.user}>
-                  <Bookmark className="w-4 h-4 mr-1" /> My Saved Quizzes
+                  <Bookmark className="w-4 h-4 mr-1" /> {t('create.mySavedQuizzes')}
                 </TabsTrigger>
               </TabsList>
 
@@ -816,9 +869,9 @@ export default function QuizBlitzApp() {
                   <Card className="bg-white/5 border-white/10">
                     <CardContent className="p-6 text-center">
                       <User className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-                      <p className="text-gray-400 mb-3">Sign in to view your saved quizzes</p>
+                      <p className="text-gray-400 mb-3">{t('create.signInToView')}</p>
                       <Button onClick={() => { setAuthMode('login'); setShowAuthModal(true) }} className="bg-gradient-to-r from-quiz-purple to-quiz-blue text-white">
-                        Sign In
+                        {t('auth.signIn')}
                       </Button>
                     </CardContent>
                   </Card>
@@ -830,7 +883,7 @@ export default function QuizBlitzApp() {
                   <Card className="bg-white/5 border-white/10">
                     <CardContent className="p-6 text-center">
                       <Bookmark className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-                      <p className="text-gray-400">No saved quizzes yet. Generate some questions and save them!</p>
+                      <p className="text-gray-400">{t('create.noSavedQuizzes')}</p>
                     </CardContent>
                   </Card>
                 ) : (
@@ -848,12 +901,12 @@ export default function QuizBlitzApp() {
                                 <span>•</span>
                                 <span>{q.difficulty}</span>
                                 <span>•</span>
-                                <span>{q.timePerQuestion}s</span>
+                                <span>{q.timePerQuestion}{t('create.seconds')}</span>
                               </div>
                             </div>
                             <div className="flex gap-2 shrink-0">
                               <Button size="sm" onClick={() => loadSavedQuiz(q.id)} className="bg-gradient-to-r from-quiz-purple to-quiz-blue text-white">
-                                <FolderOpen className="w-4 h-4 mr-1" />Load
+                                <FolderOpen className="w-4 h-4 mr-1" />{t('create.load')}
                               </Button>
                               <Button size="sm" variant="ghost" onClick={() => deleteSavedQuiz(q.id)} className="text-gray-400 hover:text-red-400">
                                 <Trash2 className="w-4 h-4" />
@@ -870,7 +923,7 @@ export default function QuizBlitzApp() {
               <TabsContent value="create" className="mt-4">
                 {/* Category Selection */}
                 <div className="mb-8">
-                  <Label className="text-lg font-semibold text-white mb-3 block">Choose a Category</Label>
+                  <Label className="text-lg font-semibold text-white mb-3 block">{t('create.chooseCategory')}</Label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {CATEGORIES.map((cat) => {
                       const Icon = cat.icon
@@ -886,7 +939,7 @@ export default function QuizBlitzApp() {
                           <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${cat.color} flex items-center justify-center`}>
                             <Icon className="w-6 h-6 text-white" />
                           </div>
-                          <span className={`text-sm font-medium text-center ${isSelected ? 'text-yellow-300' : 'text-gray-300'}`}>{cat.name}</span>
+                          <span className={`text-sm font-medium text-center ${isSelected ? 'text-yellow-300' : 'text-gray-300'}`}>{tc(cat.id)}</span>
                           {isSelected && <Check className="absolute top-2 right-2 w-4 h-4 text-yellow-400" />}
                         </button>
                       )
@@ -897,40 +950,40 @@ export default function QuizBlitzApp() {
                 {/* Game Settings */}
                 {selectedCategory && (
                   <Card className="bg-white/5 border-white/10 mb-6 animate-fade-in">
-                    <CardHeader><CardTitle className="text-white">Game Settings</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-white">{t('create.gameSettings')}</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
-                          <Label className="text-gray-300 mb-2 block">Questions</Label>
+                          <Label className="text-gray-300 mb-2 block">{t('create.questionsLabel')}</Label>
                           <Select value={questionCount.toString()} onValueChange={(v) => setQuestionCount(parseInt(v))}>
                             <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
-                            <SelectContent>{[5, 10, 15, 20, 25, 30].map(n => <SelectItem key={n} value={n.toString()}>{n} Questions</SelectItem>)}</SelectContent>
+                            <SelectContent>{[5, 10, 15, 20, 25, 30].map(n => <SelectItem key={n} value={n.toString()}>{n} {t('create.questionsLabel')}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
                         <div>
-                          <Label className="text-gray-300 mb-2 block">Difficulty</Label>
+                          <Label className="text-gray-300 mb-2 block">{t('create.difficulty')}</Label>
                           <Select value={difficulty} onValueChange={setDifficulty}>
                             <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="easy">Easy</SelectItem>
-                              <SelectItem value="medium">Medium</SelectItem>
-                              <SelectItem value="hard">Hard</SelectItem>
-                              <SelectItem value="mixed">Mixed</SelectItem>
+                              <SelectItem value="easy">{t('create.easy')}</SelectItem>
+                              <SelectItem value="medium">{t('create.medium')}</SelectItem>
+                              <SelectItem value="hard">{t('create.hard')}</SelectItem>
+                              <SelectItem value="mixed">{t('create.mixed')}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         <div>
-                          <Label className="text-gray-300 mb-2 block">Time / Question</Label>
+                          <Label className="text-gray-300 mb-2 block">{t('create.timePerQuestion')}</Label>
                           <Select value={timePerQuestion.toString()} onValueChange={(v) => setTimePerQuestion(parseInt(v))}>
                             <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
-                            <SelectContent>{[10, 15, 20, 30].map(n => <SelectItem key={n} value={n.toString()}>{n}s</SelectItem>)}</SelectContent>
+                            <SelectContent>{[10, 15, 20, 30].map(n => <SelectItem key={n} value={n.toString()}>{n}{t('create.seconds')}</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
                       </div>
 
                       <Button onClick={generateQuestions} disabled={isGenerating || !selectedCategory}
                         className="w-full h-12 text-lg font-bold bg-gradient-to-r from-quiz-purple to-quiz-blue hover:from-quiz-purple hover:to-quiz-purple text-white">
-                        {isGenerating ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Generating Questions...</> : <><Sparkles className="w-5 h-5 mr-2" />Auto-Generate Questions</>}
+                        {isGenerating ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />{t('create.generating')}</> : <><Sparkles className="w-5 h-5 mr-2" />{t('create.autoGenerate')}</>}
                       </Button>
                     </CardContent>
                   </Card>
@@ -943,32 +996,32 @@ export default function QuizBlitzApp() {
               <div className="animate-fade-in">
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                    <Brain className="w-6 h-6 text-purple-400" />Questions ({questions.length})
+                    <Brain className="w-6 h-6 text-purple-400" />{t('create.questionsLabel')} ({questions.length})
                   </h3>
                   <div className="flex gap-2 flex-wrap">
                     {/* Save Quiz Button */}
                     {session?.user ? (
                       <div className="flex items-center gap-2">
                         <Input value={saveQuizName} onChange={(e) => setSaveQuizName(e.target.value)}
-                          placeholder="Quiz name..." className="h-8 w-32 bg-white/5 border-white/10 text-white text-xs" />
+                          placeholder={t('create.quizNamePlaceholder')} className="h-8 w-32 bg-white/5 border-white/10 text-white text-xs" />
                         <Button variant="outline" size="sm" onClick={handleSaveQuiz} disabled={isSavingQuiz}
                           className="border-white/20 text-gray-300 hover:text-white">
-                          {saveSuccess ? <><Check className="w-4 h-4 mr-1 text-green-400" />Saved!</> :
+                          {saveSuccess ? <><Check className="w-4 h-4 mr-1 text-green-400" />{t('create.saved')}</> :
                             isSavingQuiz ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> :
-                            <><Bookmark className="w-4 h-4 mr-1" />Save</>}
+                            <><Bookmark className="w-4 h-4 mr-1" />{t('create.saveBtn')}</>}
                         </Button>
                       </div>
                     ) : (
                       <Button variant="outline" size="sm" onClick={() => { setAuthMode('login'); setShowAuthModal(true) }}
                         className="border-white/20 text-gray-400 hover:text-white">
-                        <Bookmark className="w-4 h-4 mr-1" />Save Quiz
+                        <Bookmark className="w-4 h-4 mr-1" />{t('create.saveQuiz')}
                       </Button>
                     )}
                     <Button variant="outline" size="sm" onClick={generateQuestions} disabled={isGenerating} className="border-white/20 text-gray-300 hover:text-white">
-                      <RotateCcw className="w-4 h-4 mr-1" />Regenerate
+                      <RotateCcw className="w-4 h-4 mr-1" />{t('create.regenerate')}
                     </Button>
                     <Button onClick={handleCreateRoom} className="bg-gradient-to-r from-quiz-green to-emerald-600 text-white font-bold">
-                      Create Room <ChevronRight className="w-4 h-4 ml-1" />
+                      {t('create.createRoom')} <ChevronRight className="w-4 h-4 ml-1" />
                     </Button>
                   </div>
                 </div>
@@ -980,7 +1033,7 @@ export default function QuizBlitzApp() {
                         {editingQuestion === index ? (
                           <div className="space-y-3">
                             <div>
-                              <Label className="text-gray-400 text-xs mb-1 block">Question {index + 1}</Label>
+                              <Label className="text-gray-400 text-xs mb-1 block">{t('create.question')} {index + 1}</Label>
                               <Textarea value={editForm?.text || ''} onChange={(e) => setEditForm(prev => prev ? { ...prev, text: e.target.value } : null)} className="bg-white/5 border-white/10 text-white min-h-[60px]" />
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -992,16 +1045,16 @@ export default function QuizBlitzApp() {
                                 </div>
                               ))}
                             </div>
-                            <p className="text-xs text-gray-500">Select radio to mark correct answer</p>
+                            <p className="text-xs text-gray-500">{t('create.selectCorrect')}</p>
                             <div className="flex gap-2">
-                              <Button size="sm" onClick={() => saveEditedQuestion(index)} className="bg-green-600 hover:bg-green-700 text-white"><Save className="w-4 h-4 mr-1" />Save</Button>
-                              <Button size="sm" variant="ghost" onClick={() => { setEditingQuestion(null); setEditForm(null) }} className="text-gray-400">Cancel</Button>
+                              <Button size="sm" onClick={() => saveEditedQuestion(index)} className="bg-green-600 hover:bg-green-700 text-white"><Save className="w-4 h-4 mr-1" />{t('create.saveBtn')}</Button>
+                              <Button size="sm" variant="ghost" onClick={() => { setEditingQuestion(null); setEditForm(null) }} className="text-gray-400">{t('create.cancel')}</Button>
                             </div>
                           </div>
                         ) : (
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1">
-                              <p className="text-white font-medium mb-2"><span className="text-yellow-400 mr-2">Q{index + 1}.</span>{q.text}</p>
+                              <p className="text-white font-medium mb-2"><span className="text-yellow-400 mr-2">{t('create.question')}{index + 1}.</span>{q.text}</p>
                               <div className="grid grid-cols-2 gap-1.5 text-sm">
                                 {(['optionA', 'optionB', 'optionC', 'optionD'] as const).map((opt) => (
                                   <div key={opt} className={`px-2 py-1 rounded text-xs ${q.correctAnswer === opt ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-white/5 text-gray-400'}`}>
@@ -1023,7 +1076,7 @@ export default function QuizBlitzApp() {
 
                 <div className="mt-6 text-center">
                   <Button onClick={handleCreateRoom} size="lg" className="h-14 px-12 text-lg font-bold bg-gradient-to-r from-quiz-green to-emerald-600 hover:from-quiz-green hover:to-quiz-green text-white shadow-lg shadow-green-500/20">
-                    <Play className="w-5 h-5 mr-2" />Create Room & Start
+                    <Play className="w-5 h-5 mr-2" />{t('create.createRoomStart')}
                   </Button>
                 </div>
               </div>
@@ -1036,25 +1089,28 @@ export default function QuizBlitzApp() {
       {view === 'join' && (
         <div className="flex-1 flex flex-col items-center justify-center p-4">
           <div className="w-full max-w-md animate-slide-up">
-            <Button variant="ghost" onClick={() => { setView('home'); setJoinError('') }} className="mb-4 text-gray-400 hover:text-white">
-              <ArrowLeft className="w-4 h-4 mr-2" />Back
-            </Button>
+            <div className="flex items-center justify-between mb-4">
+              <Button variant="ghost" onClick={() => { setView('home'); setJoinError('') }} className="text-gray-400 hover:text-white">
+                <ArrowLeft className="w-4 h-4 mr-2" />{t('create.back')}
+              </Button>
+              <LanguageSelector compact />
+            </div>
             <Card className="bg-white/5 border-white/10">
-              <CardHeader><CardTitle className="text-white text-center text-2xl">Join a Game</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-white text-center text-2xl">{t('join.title')}</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label className="text-gray-300 mb-2 block">Room Code</Label>
+                  <Label className="text-gray-300 mb-2 block">{t('join.roomCode')}</Label>
                   <Input value={roomCode} onChange={(e) => setRoomCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="Enter 6-digit code" className="h-14 text-2xl text-center tracking-[0.5em] font-mono bg-white/5 border-white/10 text-white placeholder:text-gray-500 placeholder:tracking-normal" maxLength={6} />
+                    placeholder={t('join.roomCodePlaceholder')} className="h-14 text-2xl text-center tracking-[0.5em] font-mono bg-white/5 border-white/10 text-white placeholder:text-gray-500 placeholder:tracking-normal" maxLength={6} />
                 </div>
                 <div>
-                  <Label className="text-gray-300 mb-2 block">Your Name</Label>
-                  <Input value={playerName} onChange={(e) => setPlayerName(e.target.value)} placeholder="Enter your nickname" className="h-12 text-lg bg-white/5 border-white/10 text-white" maxLength={20} />
+                  <Label className="text-gray-300 mb-2 block">{t('join.yourName')}</Label>
+                  <Input value={playerName} onChange={(e) => setPlayerName(e.target.value)} placeholder={t('join.namePlaceholder')} className="h-12 text-lg bg-white/5 border-white/10 text-white" maxLength={20} />
                 </div>
                 {joinError && <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg text-sm text-center">{joinError}</div>}
                 <Button onClick={handleJoinRoom} disabled={!roomCode || roomCode.length !== 6 || !playerName.trim()}
                   className="w-full h-14 text-lg font-bold bg-gradient-to-r from-quiz-blue to-quiz-purple hover:from-quiz-blue hover:to-quiz-blue text-white">
-                  <LogIn className="w-5 h-5 mr-2" />Join Game
+                  <LogIn className="w-5 h-5 mr-2" />{t('join.joinGame')}
                 </Button>
               </CardContent>
             </Card>
@@ -1067,20 +1123,23 @@ export default function QuizBlitzApp() {
         <div className="flex-1 flex flex-col items-center justify-center p-4">
           <div className="w-full max-w-lg animate-slide-up">
             <Card className="bg-white/5 border-white/10 overflow-hidden">
-              <div className="bg-gradient-to-r from-quiz-purple to-quiz-blue p-6 text-center">
-                <h2 className="text-2xl font-bold text-white mb-2">Game Lobby</h2>
+              <div className="bg-gradient-to-r from-quiz-purple to-quiz-blue p-6 text-center relative">
+                <div className="absolute top-3 right-3">
+                  <LanguageSelector compact />
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-2">{t('lobby.title')}</h2>
                 <p className="text-white/70">{categoryName}</p>
               </div>
               <CardContent className="p-6 space-y-6">
                 <div className="text-center">
-                  <p className="text-gray-400 text-sm mb-2">Room Code</p>
+                  <p className="text-gray-400 text-sm mb-2">{t('lobby.roomCode')}</p>
                   <div className="flex items-center justify-center gap-3">
                     <span className="text-5xl font-mono font-black tracking-[0.3em] text-yellow-400">{roomCode}</span>
                     <Button variant="ghost" size="sm" onClick={copyRoomCode} className="text-gray-400 hover:text-white">
                       {codeCopied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5" />}
                     </Button>
                   </div>
-                  <p className="text-gray-500 text-xs mt-1">Share this code with players to join</p>
+                  <p className="text-gray-500 text-xs mt-1">{t('join.shareCode')}</p>
                 </div>
 
                 <Separator className="bg-white/10" />
@@ -1088,7 +1147,7 @@ export default function QuizBlitzApp() {
                 <div>
                   <div className="flex items-center gap-2 mb-3">
                     <Users className="w-5 h-5 text-gray-400" />
-                    <span className="text-gray-300 font-medium">Players ({players.length})</span>
+                    <span className="text-gray-300 font-medium">{t('lobby.players')} ({players.length})</span>
                   </div>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {players.map((p) => (
@@ -1097,7 +1156,7 @@ export default function QuizBlitzApp() {
                           {p.name.charAt(0).toUpperCase()}
                         </div>
                         <span className="text-white font-medium flex-1">{p.name}</span>
-                        {p.isCreator && <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30"><Crown className="w-3 h-3 mr-1" />Creator</Badge>}
+                        {p.isCreator && <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30"><Crown className="w-3 h-3 mr-1" />{t('lobby.creator')}</Badge>}
                       </div>
                     ))}
                   </div>
@@ -1107,12 +1166,12 @@ export default function QuizBlitzApp() {
 
                 <div className="grid grid-cols-2 gap-3 text-center">
                   <div className="bg-white/5 p-3 rounded-lg">
-                    <p className="text-gray-400 text-xs">Questions</p>
+                    <p className="text-gray-400 text-xs">{t('lobby.questions')}</p>
                     <p className="text-white font-bold text-lg">{questions.length || totalQuestions}</p>
                   </div>
                   <div className="bg-white/5 p-3 rounded-lg">
-                    <p className="text-gray-400 text-xs">Time / Question</p>
-                    <p className="text-white font-bold text-lg">{timePerQuestion}s</p>
+                    <p className="text-gray-400 text-xs">{t('lobby.timePerQuestion')}</p>
+                    <p className="text-white font-bold text-lg">{timePerQuestion}{t('create.seconds')}</p>
                   </div>
                 </div>
 
@@ -1120,19 +1179,19 @@ export default function QuizBlitzApp() {
                 {isCreator && (
                   <Button variant="outline" onClick={() => setShowCastModal(true)}
                     className="w-full border-purple-500/30 text-purple-300 hover:bg-purple-500/10 hover:text-purple-200 h-11">
-                    <Monitor className="w-5 h-5 mr-2" /> Cast to TV
+                    <Monitor className="w-5 h-5 mr-2" /> {t('lobby.castToTV')}
                   </Button>
                 )}
 
                 {isCreator ? (
                   <Button onClick={handleStartGame} disabled={players.length < 1}
                     className="w-full h-14 text-lg font-bold bg-gradient-to-r from-quiz-green to-emerald-600 hover:from-quiz-green hover:to-quiz-green text-white shadow-lg shadow-green-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]">
-                    <Play className="w-5 h-5 mr-2" />Start Game
+                    <Play className="w-5 h-5 mr-2" />{t('lobby.startGame')}
                   </Button>
                 ) : (
                   <div className="text-center text-gray-400 py-4">
                     <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
-                    Waiting for creator to start the game...
+                    {t('lobby.waitingForCreator')}
                   </div>
                 )}
               </CardContent>
@@ -1149,6 +1208,7 @@ export default function QuizBlitzApp() {
               {currentQuestion.questionNumber} / {currentQuestion.totalQuestions}
             </Badge>
             <div className="flex items-center gap-2">
+              <LanguageSelector compact />
               <Button variant="ghost" size="sm" onClick={() => setShowCastModal(true)} className="text-gray-400 hover:text-purple-300 h-8">
                 <Monitor className="w-4 h-4" />
               </Button>
@@ -1161,7 +1221,7 @@ export default function QuizBlitzApp() {
             <div className="flex items-center justify-between mb-1">
               <Clock className={`w-5 h-5 ${timeLeft <= 5 ? 'text-red-400 animate-countdown-pulse' : 'text-gray-400'}`} />
               <span className={`text-2xl font-bold tabular-nums ${timeLeft <= 5 ? 'text-red-400 animate-countdown-pulse' : 'text-white'}`}>
-                {Math.ceil(timeLeft)}s
+                {Math.ceil(timeLeft)}{t('create.seconds')}
               </span>
             </div>
             <Progress value={(timeLeft / currentQuestion.timeLimit) * 100} className={`h-3 ${timeLeft <= 5 ? '[&>div]:bg-red-500' : '[&>div]:bg-quiz-green'}`} />
@@ -1203,12 +1263,12 @@ export default function QuizBlitzApp() {
           <div className="mt-4 text-center">
             {answerSubmitted && !isCreator && (
               <p className="text-gray-400 flex items-center justify-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-green-400" />Answer submitted! Waiting for results...
+                <CheckCircle2 className="w-5 h-5 text-green-400" />{t('game.submitted')}
               </p>
             )}
             {isCreator && answerSubmitted && (
               <Button onClick={handleAdvanceQuestion} className="bg-gradient-to-r from-quiz-purple to-quiz-blue text-white font-bold">
-                <ChevronRight className="w-4 h-4 mr-1" />Show Results & Next
+                <ChevronRight className="w-4 h-4 mr-1" />{t('game.showResults')}
               </Button>
             )}
           </div>
@@ -1219,11 +1279,11 @@ export default function QuizBlitzApp() {
       {view === 'results' && questionResults && (
         <div className="flex-1 flex flex-col items-center p-4 max-w-lg mx-auto w-full">
           <div className="text-center mb-6 animate-slide-up">
-            <h2 className="text-2xl font-bold text-white mb-2">Question Results</h2>
+            <h2 className="text-2xl font-bold text-white mb-2">{t('results.title')}</h2>
             <div className="flex items-center justify-center gap-4 text-sm">
-              <span className="text-gray-400">{questionResults.correctCount}/{questionResults.totalAnswers} correct</span>
+              <span className="text-gray-400">{questionResults.correctCount}/{questionResults.totalAnswers} {t('results.correct')}</span>
               <span className="text-gray-500">|</span>
-              <span className="text-yellow-400">Correct: {questionResults.correctAnswer.replace('option', '').toUpperCase()}</span>
+              <span className="text-yellow-400">{t('results.correctAnswer')}: {questionResults.correctAnswer.replace('option', '').toUpperCase()}</span>
             </div>
           </div>
 
@@ -1234,15 +1294,15 @@ export default function QuizBlitzApp() {
             return (
               <div className={`w-full p-6 rounded-xl mb-6 text-center animate-slide-up ${myResult.correct ? 'bg-green-500/20 border-2 border-green-500/30' : 'bg-red-500/20 border-2 border-red-500/30'}`}>
                 {myResult.correct ? <CheckCircle2 className="w-16 h-16 text-green-400 mx-auto mb-2" /> : <XCircle className="w-16 h-16 text-red-400 mx-auto mb-2" />}
-                <p className={`text-2xl font-bold ${myResult.correct ? 'text-green-400' : 'text-red-400'}`}>{myResult.correct ? 'Correct!' : 'Wrong!'}</p>
-                {myResult.correct && myResult.points > 0 && <p className="text-yellow-400 text-lg font-bold mt-1">+{myResult.points} points</p>}
+                <p className={`text-2xl font-bold ${myResult.correct ? 'text-green-400' : 'text-red-400'}`}>{myResult.correct ? t('results.correctExclaim') : t('results.wrong')}</p>
+                {myResult.correct && myResult.points > 0 && <p className="text-yellow-400 text-lg font-bold mt-1">+{myResult.points} {t('results.points')}</p>}
               </div>
             )
           })()}
 
           {/* Standings */}
           <div className="w-full animate-slide-up" style={{ animationDelay: '0.2s' }}>
-            <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2"><Trophy className="w-5 h-5 text-yellow-400" />Standings</h3>
+            <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2"><Trophy className="w-5 h-5 text-yellow-400" />{t('results.standings')}</h3>
             <div className="space-y-2">
               {(questionResults.leaderboard || []).slice(0, 10).map((p: any) => (
                 <div key={p.id} className={`flex items-center gap-3 p-3 rounded-lg ${p.id === playerId ? 'bg-purple-500/20 border border-purple-500/30' : 'bg-white/5'}`}>
@@ -1259,7 +1319,7 @@ export default function QuizBlitzApp() {
           {isCreator && (
             <div className="mt-6 text-center">
               <Button onClick={handleContinueToNextQuestion} className="bg-gradient-to-r from-quiz-green to-emerald-600 text-white font-bold h-12 px-8 text-lg">
-                <ChevronRight className="w-5 h-5 mr-1" />Next Question
+                <ChevronRight className="w-5 h-5 mr-1" />{t('game.showResults')}
               </Button>
             </div>
           )}
@@ -1267,7 +1327,7 @@ export default function QuizBlitzApp() {
           {!isCreator && (
             <div className="mt-6 text-center text-gray-400">
               <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
-              Waiting for next question...
+              {t('lobby.waitingForCreator')}
             </div>
           )}
         </div>
@@ -1278,8 +1338,7 @@ export default function QuizBlitzApp() {
         <div className="flex-1 flex flex-col items-center p-4 max-w-lg mx-auto w-full">
           <div className="text-center mb-8 animate-slide-up">
             <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-3" />
-            <h2 className="text-3xl font-black text-white">Game Over!</h2>
-            <p className="text-gray-400">Final Standings</p>
+            <h2 className="text-3xl font-black text-white">{t('leaderboard.title')}</h2>
           </div>
 
           {/* Podium */}
@@ -1322,14 +1381,14 @@ export default function QuizBlitzApp() {
                 <span className="text-white font-medium flex-1">{p.name}</span>
                 <div className="text-right">
                   <span className="text-yellow-400 font-bold block">{p.score} pts</span>
-                  <span className="text-gray-500 text-xs">{p.correctAnswers} correct</span>
+                  <span className="text-gray-500 text-xs">{p.correctAnswers} {t('leaderboard.correctAnswers')}</span>
                 </div>
               </div>
             ))}
           </div>
 
           <Button onClick={resetState} className="mt-8 h-12 px-8 text-lg font-bold bg-gradient-to-r from-quiz-purple to-quiz-blue text-white">
-            <RotateCcw className="w-5 h-5 mr-2" />Play Again
+            <RotateCcw className="w-5 h-5 mr-2" />{t('leaderboard.playAgain')}
           </Button>
         </div>
       )}

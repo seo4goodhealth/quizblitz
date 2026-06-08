@@ -6,6 +6,7 @@ import { Progress } from '@/components/ui/progress'
 import {
   Trophy, Clock, Users, Zap, Crown, CheckCircle2, XCircle,
 } from 'lucide-react'
+import { useI18n, I18nProvider, LANGUAGES } from '@/lib/i18n'
 
 interface PlayerInfo {
   id: string
@@ -15,9 +16,33 @@ interface PlayerInfo {
   isCreator: boolean
 }
 
-export default function TVPage() {
+// ==================== LANGUAGE SELECTOR COMPONENT ====================
+function LanguageSelectorCompact() {
+  const { locale, setLocale } = useI18n()
+  return (
+    <div className="flex items-center gap-1">
+      {LANGUAGES.map((lang) => (
+        <button
+          key={lang.code}
+          onClick={() => setLocale(lang.code)}
+          className={`px-1.5 py-0.5 rounded text-xs transition-all ${
+            locale === lang.code
+              ? 'bg-purple-600/30 text-purple-300 ring-1 ring-purple-500/50'
+              : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+          }`}
+          title={lang.name}
+        >
+          {lang.flag}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function TVPageContent() {
   const params = useParams()
   const code = params.code as string
+  const { t, tc } = useI18n()
 
   const [status, setStatus] = useState<string>('loading')
   const [categoryName, setCategoryName] = useState('')
@@ -105,7 +130,7 @@ export default function TVPage() {
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <Zap className="w-16 h-16 text-yellow-400 mx-auto mb-4 animate-pulse" />
-          <p className="text-2xl text-white font-bold">Connecting to game...</p>
+          <p className="text-2xl text-white font-bold">{t('tv.gameStarting')}</p>
         </div>
       </div>
     )
@@ -117,8 +142,8 @@ export default function TVPage() {
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-          <p className="text-2xl text-white font-bold">Room not found</p>
-          <p className="text-gray-400 mt-2">Check the room code and try again</p>
+          <p className="text-2xl text-white font-bold">{t('tv.gameOver')}</p>
+          <p className="text-gray-400 mt-2">{t('join.roomCode')}</p>
         </div>
       </div>
     )
@@ -130,7 +155,7 @@ export default function TVPage() {
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-950 flex flex-col items-center justify-center p-8">
         <div className="text-center mb-10">
           <Trophy className="w-20 h-20 text-yellow-400 mx-auto mb-4" />
-          <h1 className="text-5xl font-black text-white mb-2">Game Over!</h1>
+          <h1 className="text-5xl font-black text-white mb-2">{t('tv.gameOver')}</h1>
           <p className="text-xl text-gray-400">{categoryName}</p>
         </div>
 
@@ -191,7 +216,7 @@ export default function TVPage() {
         </div>
 
         <div className="mt-8 text-center text-gray-500">
-          <p className="text-sm">Room: {code}</p>
+          <p className="text-sm">{t('lobby.roomCode')}: {code}</p>
         </div>
       </div>
     )
@@ -204,10 +229,10 @@ export default function TVPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-950 flex flex-col items-center justify-center p-8">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-white mb-3">Question Results</h2>
+          <h2 className="text-3xl font-bold text-white mb-3">{t('results.title')}</h2>
           <div className="flex items-center justify-center gap-6 text-lg">
-            <span className="text-gray-400">{questionResults.correctCount}/{questionResults.totalAnswers} correct</span>
-            <span className="text-yellow-400 font-bold">Answer: {correctLabel}</span>
+            <span className="text-gray-400">{questionResults.correctCount}/{questionResults.totalAnswers} {t('results.correct')}</span>
+            <span className="text-yellow-400 font-bold">{t('results.correctAnswer')}: {correctLabel}</span>
           </div>
         </div>
 
@@ -232,7 +257,7 @@ export default function TVPage() {
                   <div key={opt.key} className={`relative p-6 rounded-2xl bg-gradient-to-br ${opt.cls} ${isCorrect ? 'ring-4 ring-white shadow-xl scale-105' : 'opacity-60'} transition-all`}>
                     <div className="text-white font-black text-3xl mb-1">{opt.label}</div>
                     <div className="text-white/80 text-lg font-bold">{pct}%</div>
-                    <div className="text-white/60 text-sm">{optionCounts[opt.key]} votes</div>
+                    <div className="text-white/60 text-sm">{optionCounts[opt.key]} {t('tv.answered')}</div>
                     {isCorrect && <CheckCircle2 className="absolute top-3 right-3 w-8 h-8 text-white" />}
                   </div>
                 )
@@ -244,7 +269,7 @@ export default function TVPage() {
         {/* Mini leaderboard */}
         <div className="w-full max-w-lg">
           <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-yellow-400" />Standings
+            <Trophy className="w-5 h-5 text-yellow-400" />{t('results.standings')}
           </h3>
           <div className="space-y-2">
             {(questionResults.leaderboard || []).slice(0, 5).map((p: any) => (
@@ -258,7 +283,7 @@ export default function TVPage() {
         </div>
 
         <div className="mt-6 text-gray-500 text-sm">
-          Room: {code}
+          {t('lobby.roomCode')}: {code}
         </div>
       </div>
     )
@@ -270,22 +295,22 @@ export default function TVPage() {
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-950 flex flex-col items-center justify-center p-8">
         <div className="text-center mb-10">
           <Zap className="w-16 h-16 text-yellow-400 mx-auto mb-4 animate-pulse" />
-          <h1 className="text-5xl font-black text-white mb-2">QuizBlitz</h1>
+          <h1 className="text-5xl font-black text-white mb-2">{t('app.title')}</h1>
           <p className="text-2xl text-gray-400">{categoryName}</p>
         </div>
 
         <div className="text-center mb-10">
-          <p className="text-gray-400 text-lg mb-3">Room Code</p>
+          <p className="text-gray-400 text-lg mb-3">{t('lobby.roomCode')}</p>
           <div className="text-7xl font-mono font-black tracking-[0.3em] text-yellow-400 mb-2">
             {code}
           </div>
-          <p className="text-gray-500">Join at QuizBlitz with this code</p>
+          <p className="text-gray-500">{t('tv.joinWithCode')}</p>
         </div>
 
         <div className="w-full max-w-md">
           <div className="flex items-center gap-2 mb-4 justify-center">
             <Users className="w-6 h-6 text-gray-400" />
-            <span className="text-white font-bold text-xl">{players.length} Players</span>
+            <span className="text-white font-bold text-xl">{players.length} {t('lobby.players')}</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-64 overflow-y-auto">
             {players.map((p) => (
@@ -301,7 +326,11 @@ export default function TVPage() {
 
         <div className="mt-8 flex items-center gap-2 text-gray-500">
           <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-          Waiting for game to start...
+          {t('tv.waitingForPlayers')}
+        </div>
+
+        <div className="absolute top-4 right-4">
+          <LanguageSelectorCompact />
         </div>
       </div>
     )
@@ -315,10 +344,11 @@ export default function TVPage() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <Zap className="w-8 h-8 text-yellow-400" />
-            <span className="text-xl font-bold text-white">QuizBlitz</span>
+            <span className="text-xl font-bold text-white">{t('app.title')}</span>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-gray-400">Room: {code}</span>
+            <LanguageSelectorCompact />
+            <span className="text-gray-400">{t('lobby.roomCode')}: {code}</span>
             <span className="text-purple-300 font-bold">
               {currentQuestion.questionNumber} / {currentQuestion.totalQuestions}
             </span>
@@ -330,7 +360,7 @@ export default function TVPage() {
           <div className="flex items-center justify-between mb-2">
             <Clock className={`w-7 h-7 ${isLowTime ? 'text-red-400 animate-pulse' : 'text-gray-400'}`} />
             <span className={`text-4xl font-black tabular-nums ${isLowTime ? 'text-red-400 animate-pulse' : 'text-white'}`}>
-              {Math.ceil(timeLeft)}s
+              {Math.ceil(timeLeft)}{t('create.seconds')}
             </span>
           </div>
           <div className="w-full h-4 bg-white/10 rounded-full overflow-hidden">
@@ -377,7 +407,7 @@ export default function TVPage() {
           {/* Answer count */}
           <div className="mt-6 text-gray-400 text-lg">
             <Users className="w-5 h-5 inline mr-2" />
-            {currentQuestion.answerCount || 0} answers submitted
+            {currentQuestion.answerCount || 0} {t('tv.answered')}
           </div>
         </div>
       </div>
@@ -389,9 +419,17 @@ export default function TVPage() {
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
       <div className="text-center">
         <Zap className="w-16 h-16 text-yellow-400 mx-auto mb-4 animate-pulse" />
-        <p className="text-2xl text-white font-bold">Waiting for next question...</p>
-        <p className="text-gray-500 mt-2">Room: {code}</p>
+        <p className="text-2xl text-white font-bold">{t('tv.waitingForPlayers')}</p>
+        <p className="text-gray-500 mt-2">{t('lobby.roomCode')}: {code}</p>
       </div>
     </div>
+  )
+}
+
+export default function TVPage() {
+  return (
+    <I18nProvider>
+      <TVPageContent />
+    </I18nProvider>
   )
 }
