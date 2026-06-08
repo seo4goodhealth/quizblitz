@@ -1,5 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+
+async function callAI(systemPrompt: string, userPrompt: string): Promise<string | null> {
+  // Try OpenAI first (works on Vercel, cPanel, any hosting)
+  const openaiKey = process.env.OPENAI_API_KEY
+  if (openaiKey) {
+    const { default: OpenAI } = await import('openai')
+    const openai = new OpenAI({ apiKey: openaiKey })
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.8,
+      max_tokens: 4000,
+    })
+    return completion.choices[0]?.message?.content || null
+  }
+
+  // Fallback: try z-ai-web-dev-sdk (works in this dev environment)
+  try {
+    const ZAI = (await import('z-ai-web-dev-sdk')).default
+    const zai = await ZAI.create()
+    const completion = await zai.chat.completions.create({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.8,
+      max_tokens: 4000,
+    })
+    return completion.choices[0]?.message?.content || null
+  } catch {
+    return null
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,9 +44,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Category is required' }, { status: 400 })
     }
 
-    const zai = await ZAI.create()
+    const systemPrompt = 'You are a quiz question generator. You generate high-quality, accurate multiple choice questions. You always respond with valid JSON only, no markdown or extra text.'
 
-    const prompt = `Generate ${count} multiple choice quiz questions about "${category}". 
+    const userPrompt = `Generate ${count} multiple choice quiz questions about "${category}". 
 Difficulty level: ${difficulty}.
 
 IMPORTANT: Return ONLY a valid JSON array with no other text. Each question must have this exact structure:
@@ -35,24 +70,12 @@ Rules:
 - timeLimit should be between 10-30 seconds based on difficulty
 - Return ONLY the JSON array, no markdown, no explanation`
 
-    const completion = await zai.chat.completions.create({
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a quiz question generator. You generate high-quality, accurate multiple choice questions. You always respond with valid JSON only, no markdown or extra text.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.8,
-      max_tokens: 4000,
-    })
+    const content = await callAI(systemPrompt, userPrompt)
 
-    const content = completion.choices[0]?.message?.content
     if (!content) {
-      return NextResponse.json({ error: 'Failed to generate questions' }, { status: 500 })
+      return NextResponse.json({ 
+        error: 'AI service not configured. Please set the OPENAI_API_KEY environment variable.' 
+      }, { status: 500 })
     }
 
     // Parse the JSON response
