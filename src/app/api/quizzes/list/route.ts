@@ -6,48 +6,45 @@ import { db } from '@/lib/db'
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
+    if (!(session?.user as any)?.id) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
     const quizzes = await db.savedQuiz.findMany({
-      where: { userId: session.user.id },
+      where: { userId: (session.user as any).id },
       orderBy: { updatedAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        categoryName: true,
-        difficulty: true,
-        timePerQuestion: true,
-        createdAt: true,
-        updatedAt: true,
-      },
     })
 
-    // Add question count by parsing the JSON
-    const quizzesWithCount = await Promise.all(
-      quizzes.map(async (q) => {
-        const fullQuiz = await db.savedQuiz.findUnique({
-          where: { id: q.id },
-          select: { questions: true },
-        })
-        let questionCount = 0
-        if (fullQuiz?.questions) {
-          try {
-            questionCount = JSON.parse(fullQuiz.questions).length
-          } catch {
-            questionCount = 0
-          }
-        }
-        return { ...q, questionCount }
-      })
-    )
+    const quizzesWithCount = quizzes.map((q) => {
+      let questionCount = 0
+      try {
+        questionCount = JSON.parse(q.questions).length
+      } catch {
+        questionCount = 0
+      }
+      return {
+        id: q.id,
+        name: q.name,
+        categoryName: q.categoryName,
+        difficulty: q.difficulty,
+        timePerQuestion: q.timePerQuestion,
+        questionCount,
+        createdAt: q.createdAt,
+        updatedAt: q.updatedAt,
+      }
+    })
 
     return NextResponse.json({ quizzes: quizzesWithCount })
   } catch (error: any) {
     console.error('List quizzes error:', error)
+    if (error?.code === 'P1001' || error?.message?.includes('connect')) {
+      return NextResponse.json(
+        { error: 'Database not configured. Please set up DATABASE_URL.' },
+        { status: 503 }
+      )
+    }
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: 'Failed to load quizzes' },
       { status: 500 }
     )
   }

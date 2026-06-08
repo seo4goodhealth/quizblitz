@@ -13,9 +13,25 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { error: 'Please enter a valid email address' },
+        { status: 400 }
+      )
+    }
+
     if (password.length < 6) {
       return NextResponse.json(
         { error: 'Password must be at least 6 characters' },
+        { status: 400 }
+      )
+    }
+
+    if (name.length < 2) {
+      return NextResponse.json(
+        { error: 'Name must be at least 2 characters' },
         { status: 400 }
       )
     }
@@ -51,8 +67,17 @@ export async function POST(req: NextRequest) {
     })
   } catch (error: any) {
     console.error('Registration error:', error)
+
+    // Check if it's a database connection error
+    if (error?.code === 'P1001' || error?.message?.includes('connect') || error?.message?.includes('timeout')) {
+      return NextResponse.json(
+        { error: 'Database connection failed. Please make sure DATABASE_URL is configured in your environment variables.' },
+        { status: 503 }
+      )
+    }
+
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: 'Registration failed. Please try again.' },
       { status: 500 }
     )
   }
