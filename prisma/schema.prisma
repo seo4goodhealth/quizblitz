@@ -7,6 +7,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  savedQuizzes SavedQuiz[]
+}
+
+model SavedQuiz {
+  id             String   @id @default(cuid())
+  name           String
+  categoryName   String
+  userId         String
+  questions      String   // JSON string of questions array
+  difficulty     String   @default("mixed")
+  timePerQuestion Int     @default(15)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 model GameRoom {
   id          String   @id @default(cuid())
   code        String   @unique

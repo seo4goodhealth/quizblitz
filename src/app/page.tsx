@@ -1,16 +1,18 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { useSession, signIn, signOut } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Trophy, Users, Play, Plus, LogIn, Zap, Clock,
   CheckCircle2, XCircle, Crown, Sparkles, ChevronRight,
@@ -19,6 +21,7 @@ import {
   FlaskConical, Music, Film, Dumbbell, Utensils, TreePine,
   Rocket, Palette, Landmark, Calculator, PawPrint, Languages,
   Heart, Star, Swords, Award, Mic2, Laptop, Mountain, Shield,
+  Monitor, Bookmark, LogOut, User, FolderOpen,
 } from 'lucide-react'
 
 // ==================== TYPES ====================
@@ -40,6 +43,17 @@ interface PlayerInfo {
   score: number
   correctAnswers: number
   isCreator: boolean
+}
+
+interface SavedQuizInfo {
+  id: string
+  name: string
+  categoryName: string
+  difficulty: string
+  timePerQuestion: number
+  questionCount: number
+  createdAt: string
+  updatedAt: string
 }
 
 type GameView = 'home' | 'create' | 'join' | 'lobby' | 'game' | 'results' | 'leaderboard'
@@ -74,6 +88,8 @@ const CATEGORIES = [
 
 // ==================== MAIN APP ====================
 export default function QuizBlitzApp() {
+  const { data: session, status: sessionStatus } = useSession()
+
   // View state
   const [view, setView] = useState<GameView>('home')
 
@@ -105,7 +121,6 @@ export default function QuizBlitzApp() {
   const [gameStatus, setGameStatus] = useState<string>('lobby')
   const [totalQuestions, setTotalQuestions] = useState(0)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [lastResultsStatus, setLastResultsStatus] = useState<string>('')
 
   // Leaderboard
   const [finalLeaderboard, setFinalLeaderboard] = useState<any[]>([])
@@ -119,6 +134,178 @@ export default function QuizBlitzApp() {
   // Polling ref
   const pollRef = useRef<NodeJS.Timeout | null>(null)
   const [timeLeft, setTimeLeft] = useState(0)
+
+  // Auth modal state
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  const [authEmail, setAuthEmail] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authName, setAuthName] = useState('')
+  const [authError, setAuthError] = useState('')
+  const [authLoading, setAuthLoading] = useState(false)
+
+  // Save quiz state
+  const [saveQuizName, setSaveQuizName] = useState('')
+  const [isSavingQuiz, setIsSavingQuiz] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+
+  // Saved quizzes state
+  const [savedQuizzes, setSavedQuizzes] = useState<SavedQuizInfo[]>([])
+  const [isLoadingSaved, setIsLoadingSaved] = useState(false)
+
+  // Cast modal
+  const [showCastModal, setShowCastModal] = useState(false)
+
+  // ==================== AUTH FUNCTIONS ====================
+  const handleAuth = async () => {
+    setAuthError('')
+    setAuthLoading(true)
+    try {
+      if (authMode === 'register') {
+        if (!authEmail || !authName || !authPassword) {
+          setAuthError('All fields are required')
+          setAuthLoading(false)
+          return
+        }
+        if (authPassword.length < 6) {
+          setAuthError('Password must be at least 6 characters')
+          setAuthLoading(false)
+          return
+        }
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: authEmail, name: authName, password: authPassword }),
+        })
+        const data = await res.json()
+        if (data.error) {
+          setAuthError(data.error)
+          setAuthLoading(false)
+          return
+        }
+        // Auto sign in after register
+        await signIn('credentials', { email: authEmail, password: authPassword, redirect: false })
+      } else {
+        if (!authEmail || !authPassword) {
+          setAuthError('Email and password are required')
+          setAuthLoading(false)
+          return
+        }
+        const result = await signIn('credentials', { email: authEmail, password: authPassword, redirect: false })
+        if (result?.error) {
+          setAuthError('Invalid email or password')
+          setAuthLoading(false)
+          return
+        }
+      }
+      setShowAuthModal(false)
+      setAuthEmail('')
+      setAuthPassword('')
+      setAuthName('')
+      setAuthError('')
+    } catch (err) {
+      setAuthError('Something went wrong. Please try again.')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  // ==================== QUIZ SAVE/LOAD FUNCTIONS ====================
+  const handleSaveQuiz = async () => {
+    if (!session?.user || questions.length === 0) return
+    setIsSavingQuiz(true)
+    setSaveSuccess(false)
+    try {
+      const name = saveQuizName || `${CATEGORIES.find(c => c.id === selectedCategory)?.name || 'Quiz'} - ${new Date().toLocaleDateString()}`
+      const res = await fetch('/api/quizzes/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          categoryName: CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory,
+          questions,
+          difficulty,
+          timePerQuestion,
+        }),
+      })
+      const data = await res.json()
+      if (data.error) {
+        console.error('Save quiz error:', data.error)
+      } else {
+        setSaveSuccess(true)
+        setSaveQuizName('')
+        fetchSavedQuizzes()
+        setTimeout(() => setSaveSuccess(false), 3000)
+      }
+    } catch (err) {
+      console.error('Failed to save quiz:', err)
+    } finally {
+      setIsSavingQuiz(false)
+    }
+  }
+
+  const fetchSavedQuizzes = useCallback(async () => {
+    if (!session?.user) return
+    setIsLoadingSaved(true)
+    try {
+      const res = await fetch('/api/quizzes/list')
+      const data = await res.json()
+      if (data.quizzes) {
+        setSavedQuizzes(data.quizzes)
+      }
+    } catch (err) {
+      console.error('Failed to fetch saved quizzes:', err)
+    } finally {
+      setIsLoadingSaved(false)
+    }
+  }, [session?.user])
+
+  const loadSavedQuiz = async (quizId: string) => {
+    try {
+      const res = await fetch(`/api/quizzes/${quizId}`)
+      const data = await res.json()
+      if (data.questions) {
+        setQuestions(data.questions)
+        setSelectedCategory(CATEGORIES.find(c => c.name === data.categoryName)?.id || '')
+        setDifficulty(data.difficulty || 'mixed')
+        setTimePerQuestion(data.timePerQuestion || 15)
+        setQuestionCount(data.questions.length)
+      }
+    } catch (err) {
+      console.error('Failed to load quiz:', err)
+    }
+  }
+
+  const deleteSavedQuiz = async (quizId: string) => {
+    try {
+      await fetch(`/api/quizzes/${quizId}`, { method: 'DELETE' })
+      fetchSavedQuizzes()
+    } catch (err) {
+      console.error('Failed to delete quiz:', err)
+    }
+  }
+
+  // Fetch saved quizzes when session changes
+  useEffect(() => {
+    if (session?.user) {
+      fetchSavedQuizzes()
+    } else {
+      setSavedQuizzes([])
+    }
+  }, [session?.user, fetchSavedQuizzes])
+
+  // Pre-fill player name from session
+  useEffect(() => {
+    if (session?.user?.name && !playerName) {
+      setPlayerName(session.user.name)
+    }
+  }, [session?.user?.name, playerName])
+
+  // ==================== CAST TO TV ====================
+  const openTVMode = () => {
+    const url = `/tv/${roomCode}`
+    window.open(url, '_blank', 'width=1280,height=720')
+  }
 
   // ==================== POLLING ====================
   const startPolling = useCallback((code: string, pId: string) => {
@@ -138,7 +325,6 @@ export default function QuizBlitzApp() {
         setGameStatus(data.status)
 
         if (data.status === 'playing' && data.currentQuestion) {
-          // Reset answer state if it's a new question
           setCurrentQuestion(prev => {
             if (prev?.id !== data.currentQuestion.id) {
               setSelectedAnswer(null)
@@ -198,7 +384,6 @@ export default function QuizBlitzApp() {
     if (view !== 'game' || !isCreator || !roomCode || !currentQuestion) return
     if (timeLeft <= 0 && answerSubmitted && !autoAdvanceRef.current) {
       autoAdvanceRef.current = true
-      // Auto advance when time runs out
       fetch('/api/game/advance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -243,6 +428,8 @@ export default function QuizBlitzApp() {
     setEditingQuestion(null)
     setEditForm(null)
     setTimeLeft(0)
+    setSaveQuizName('')
+    setSaveSuccess(false)
   }, [stopPolling])
 
   // ==================== API CALLS ====================
@@ -382,7 +569,6 @@ export default function QuizBlitzApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: roomCode, playerId }),
       })
-      // The polling will detect the state change
     } catch (err) {
       console.error('Failed to continue:', err)
     }
@@ -394,7 +580,6 @@ export default function QuizBlitzApp() {
     setTimeout(() => setCodeCopied(false), 2000)
   }
 
-  // Save edited question
   const saveEditedQuestion = (index: number) => {
     if (!editForm) return
     const updated = [...questions]
@@ -408,19 +593,89 @@ export default function QuizBlitzApp() {
     setQuestions(questions.filter((_, i) => i !== index))
   }
 
-  // Fetch question results when in results view
-  useEffect(() => {
-    if (view !== 'results' || !roomCode || !playerId || !isCreator) return
-    // Creator already has results from advance call
-  }, [view])
-
-  // Player in results view needs to get results
-  // They'll get them from polling when the status changes back to playing
-  // For now, let's also fetch results for players
-
   // ==================== RENDER ====================
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-950 via-purple-950/30 to-gray-950">
+      {/* ====== AUTH MODAL ====== */}
+      <Dialog open={showAuthModal} onOpenChange={setShowAuthModal}>
+        <DialogContent className="bg-gray-900 border-white/10 text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white text-xl">
+              {authMode === 'login' ? 'Sign In' : 'Create Account'}
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              {authMode === 'login' ? 'Sign in to save and load quizzes' : 'Create an account to save your quizzes'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            {authMode === 'register' && (
+              <div>
+                <Label className="text-gray-300 mb-1 block">Name</Label>
+                <Input value={authName} onChange={(e) => setAuthName(e.target.value)}
+                  placeholder="Your name" className="bg-white/5 border-white/10 text-white" />
+              </div>
+            )}
+            <div>
+              <Label className="text-gray-300 mb-1 block">Email</Label>
+              <Input value={authEmail} onChange={(e) => setAuthEmail(e.target.value)}
+                type="email" placeholder="you@example.com" className="bg-white/5 border-white/10 text-white" />
+            </div>
+            <div>
+              <Label className="text-gray-300 mb-1 block">Password</Label>
+              <Input value={authPassword} onChange={(e) => setAuthPassword(e.target.value)}
+                type="password" placeholder="••••••••" className="bg-white/5 border-white/10 text-white"
+                onKeyDown={(e) => e.key === 'Enter' && handleAuth()} />
+            </div>
+            {authError && <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-2 rounded text-sm text-center">{authError}</div>}
+            <Button onClick={handleAuth} disabled={authLoading} className="w-full h-11 font-bold bg-gradient-to-r from-quiz-purple to-quiz-blue text-white">
+              {authLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{authMode === 'login' ? 'Signing in...' : 'Creating account...'}</> : authMode === 'login' ? 'Sign In' : 'Create Account'}
+            </Button>
+            <p className="text-center text-sm text-gray-400">
+              {authMode === 'login' ? "Don't have an account? " : "Already have an account? "}
+              <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError('') }} className="text-purple-400 hover:text-purple-300 underline">
+                {authMode === 'login' ? 'Sign up' : 'Sign in'}
+              </button>
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ====== CAST MODAL ====== */}
+      <Dialog open={showCastModal} onOpenChange={setShowCastModal}>
+        <DialogContent className="bg-gray-900 border-white/10 text-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white text-xl flex items-center gap-2">
+              <Monitor className="w-5 h-5 text-purple-400" /> Cast to TV
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Display the quiz on a big screen for everyone to see
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <Button onClick={openTVMode} className="w-full h-12 text-lg font-bold bg-gradient-to-r from-quiz-purple to-quiz-blue text-white">
+              <Monitor className="w-5 h-5 mr-2" /> Open TV Display
+            </Button>
+            <p className="text-gray-400 text-sm text-center">Opens a full-screen display in a new window</p>
+            <Separator className="bg-white/10" />
+            <div className="space-y-3">
+              <h4 className="text-white font-semibold text-sm">Other ways to cast:</h4>
+              <div className="bg-white/5 p-3 rounded-lg">
+                <p className="text-white font-medium text-sm mb-1">Chromecast</p>
+                <p className="text-gray-400 text-xs">Open TV Display first, then click the Cast icon in Chrome browser to cast the tab to your TV</p>
+              </div>
+              <div className="bg-white/5 p-3 rounded-lg">
+                <p className="text-white font-medium text-sm mb-1">AirPlay (Safari/iOS)</p>
+                <p className="text-gray-400 text-xs">Open TV Display on your iPhone/iPad, then use Screen Mirroring to your Apple TV</p>
+              </div>
+              <div className="bg-white/5 p-3 rounded-lg">
+                <p className="text-white font-medium text-sm mb-1">HDMI Cable</p>
+                <p className="text-gray-400 text-xs">Connect your laptop directly to a TV or projector with an HDMI cable</p>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ====== HOME VIEW ====== */}
       {view === 'home' && (
         <div className="flex-1 flex flex-col items-center justify-center p-4">
@@ -436,6 +691,31 @@ export default function QuizBlitzApp() {
               Create live quiz games, compete in real-time, and dominate the leaderboard!
             </p>
           </div>
+
+          {/* User profile / auth section */}
+          {session?.user ? (
+            <div className="w-full max-w-md mb-4 animate-slide-up">
+              <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold">
+                  {session.user.name?.charAt(0).toUpperCase() || 'U'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-medium truncate">{session.user.name}</p>
+                  <p className="text-gray-400 text-xs truncate">{session.user.email}</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => signOut({ callbackUrl: '/' })} className="text-gray-400 hover:text-red-400 shrink-0">
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="w-full max-w-md mb-4 animate-slide-up">
+              <Button variant="outline" onClick={() => { setAuthMode('login'); setShowAuthModal(true) }}
+                className="w-full border-white/10 text-gray-400 hover:text-white hover:border-white/20 h-10">
+                <User className="w-4 h-4 mr-2" /> Sign in to save quizzes
+              </Button>
+            </div>
+          )}
 
           <div className="w-full max-w-md space-y-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
             <Input
@@ -478,82 +758,170 @@ export default function QuizBlitzApp() {
             <h2 className="text-3xl font-bold text-white mb-2">Create a Game</h2>
             <p className="text-gray-400 mb-6">Pick a category, auto-generate questions, then customize anything you want.</p>
 
-            {/* Category Selection */}
-            <div className="mb-8">
-              <Label className="text-lg font-semibold text-white mb-3 block">Choose a Category</Label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {CATEGORIES.map((cat) => {
-                  const Icon = cat.icon
-                  const isSelected = selectedCategory === cat.id
-                  return (
-                    <button
-                      key={cat.id}
-                      onClick={() => { setSelectedCategory(cat.id); setQuestions([]) }}
-                      className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:scale-[1.03] active:scale-[0.97] ${
-                        isSelected ? 'border-yellow-400 bg-yellow-400/10 shadow-lg shadow-yellow-400/20' : 'border-white/10 bg-white/5 hover:border-white/20'
-                      }`}
-                    >
-                      <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${cat.color} flex items-center justify-center`}>
-                        <Icon className="w-6 h-6 text-white" />
-                      </div>
-                      <span className={`text-sm font-medium text-center ${isSelected ? 'text-yellow-300' : 'text-gray-300'}`}>{cat.name}</span>
-                      {isSelected && <Check className="absolute top-2 right-2 w-4 h-4 text-yellow-400" />}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+            {/* Tabs for Create / Saved Quizzes */}
+            <Tabs defaultValue="create" className="mb-6">
+              <TabsList className="bg-white/5 border border-white/10">
+                <TabsTrigger value="create" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-gray-400">
+                  <Sparkles className="w-4 h-4 mr-1" /> Create New
+                </TabsTrigger>
+                <TabsTrigger value="saved" className="data-[state=active]:bg-purple-600 data-[state=active]:text-white text-gray-400" disabled={!session?.user}>
+                  <Bookmark className="w-4 h-4 mr-1" /> My Saved Quizzes
+                </TabsTrigger>
+              </TabsList>
 
-            {/* Game Settings */}
-            {selectedCategory && (
-              <Card className="bg-white/5 border-white/10 mb-6 animate-fade-in">
-                <CardHeader><CardTitle className="text-white">Game Settings</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <Label className="text-gray-300 mb-2 block">Questions</Label>
-                      <Select value={questionCount.toString()} onValueChange={(v) => setQuestionCount(parseInt(v))}>
-                        <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
-                        <SelectContent>{[5, 10, 15, 20, 25, 30].map(n => <SelectItem key={n} value={n.toString()}>{n} Questions</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-gray-300 mb-2 block">Difficulty</Label>
-                      <Select value={difficulty} onValueChange={setDifficulty}>
-                        <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="easy">Easy</SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="hard">Hard</SelectItem>
-                          <SelectItem value="mixed">Mixed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-gray-300 mb-2 block">Time / Question</Label>
-                      <Select value={timePerQuestion.toString()} onValueChange={(v) => setTimePerQuestion(parseInt(v))}>
-                        <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
-                        <SelectContent>{[10, 15, 20, 30].map(n => <SelectItem key={n} value={n.toString()}>{n}s</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
+              <TabsContent value="saved" className="mt-4">
+                {!session?.user ? (
+                  <Card className="bg-white/5 border-white/10">
+                    <CardContent className="p-6 text-center">
+                      <User className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                      <p className="text-gray-400 mb-3">Sign in to view your saved quizzes</p>
+                      <Button onClick={() => { setAuthMode('login'); setShowAuthModal(true) }} className="bg-gradient-to-r from-quiz-purple to-quiz-blue text-white">
+                        Sign In
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : isLoadingSaved ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto text-purple-400" />
                   </div>
+                ) : savedQuizzes.length === 0 ? (
+                  <Card className="bg-white/5 border-white/10">
+                    <CardContent className="p-6 text-center">
+                      <Bookmark className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                      <p className="text-gray-400">No saved quizzes yet. Generate some questions and save them!</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="space-y-3">
+                    {savedQuizzes.map((q) => (
+                      <Card key={q.id} className="bg-white/5 border-white/10 hover:border-white/20 transition-colors">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white font-medium truncate">{q.name}</p>
+                              <div className="flex items-center gap-2 text-xs text-gray-400 mt-1">
+                                <span>{q.categoryName}</span>
+                                <span>•</span>
+                                <span>{q.questionCount} Qs</span>
+                                <span>•</span>
+                                <span>{q.difficulty}</span>
+                                <span>•</span>
+                                <span>{q.timePerQuestion}s</span>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              <Button size="sm" onClick={() => loadSavedQuiz(q.id)} className="bg-gradient-to-r from-quiz-purple to-quiz-blue text-white">
+                                <FolderOpen className="w-4 h-4 mr-1" />Load
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => deleteSavedQuiz(q.id)} className="text-gray-400 hover:text-red-400">
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
 
-                  <Button onClick={generateQuestions} disabled={isGenerating || !selectedCategory}
-                    className="w-full h-12 text-lg font-bold bg-gradient-to-r from-quiz-purple to-quiz-blue hover:from-quiz-purple hover:to-quiz-purple text-white">
-                    {isGenerating ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Generating Questions...</> : <><Sparkles className="w-5 h-5 mr-2" />Auto-Generate Questions</>}
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+              <TabsContent value="create" className="mt-4">
+                {/* Category Selection */}
+                <div className="mb-8">
+                  <Label className="text-lg font-semibold text-white mb-3 block">Choose a Category</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {CATEGORIES.map((cat) => {
+                      const Icon = cat.icon
+                      const isSelected = selectedCategory === cat.id
+                      return (
+                        <button
+                          key={cat.id}
+                          onClick={() => { setSelectedCategory(cat.id); setQuestions([]) }}
+                          className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:scale-[1.03] active:scale-[0.97] ${
+                            isSelected ? 'border-yellow-400 bg-yellow-400/10 shadow-lg shadow-yellow-400/20' : 'border-white/10 bg-white/5 hover:border-white/20'
+                          }`}
+                        >
+                          <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${cat.color} flex items-center justify-center`}>
+                            <Icon className="w-6 h-6 text-white" />
+                          </div>
+                          <span className={`text-sm font-medium text-center ${isSelected ? 'text-yellow-300' : 'text-gray-300'}`}>{cat.name}</span>
+                          {isSelected && <Check className="absolute top-2 right-2 w-4 h-4 text-yellow-400" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Game Settings */}
+                {selectedCategory && (
+                  <Card className="bg-white/5 border-white/10 mb-6 animate-fade-in">
+                    <CardHeader><CardTitle className="text-white">Game Settings</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <Label className="text-gray-300 mb-2 block">Questions</Label>
+                          <Select value={questionCount.toString()} onValueChange={(v) => setQuestionCount(parseInt(v))}>
+                            <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
+                            <SelectContent>{[5, 10, 15, 20, 25, 30].map(n => <SelectItem key={n} value={n.toString()}>{n} Questions</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-gray-300 mb-2 block">Difficulty</Label>
+                          <Select value={difficulty} onValueChange={setDifficulty}>
+                            <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="easy">Easy</SelectItem>
+                              <SelectItem value="medium">Medium</SelectItem>
+                              <SelectItem value="hard">Hard</SelectItem>
+                              <SelectItem value="mixed">Mixed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-gray-300 mb-2 block">Time / Question</Label>
+                          <Select value={timePerQuestion.toString()} onValueChange={(v) => setTimePerQuestion(parseInt(v))}>
+                            <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
+                            <SelectContent>{[10, 15, 20, 30].map(n => <SelectItem key={n} value={n.toString()}>{n}s</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <Button onClick={generateQuestions} disabled={isGenerating || !selectedCategory}
+                        className="w-full h-12 text-lg font-bold bg-gradient-to-r from-quiz-purple to-quiz-blue hover:from-quiz-purple hover:to-quiz-purple text-white">
+                        {isGenerating ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Generating Questions...</> : <><Sparkles className="w-5 h-5 mr-2" />Auto-Generate Questions</>}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+            </Tabs>
 
             {/* Questions List */}
             {questions.length > 0 && (
               <div className="animate-fade-in">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <h3 className="text-xl font-bold text-white flex items-center gap-2">
                     <Brain className="w-6 h-6 text-purple-400" />Questions ({questions.length})
                   </h3>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    {/* Save Quiz Button */}
+                    {session?.user ? (
+                      <div className="flex items-center gap-2">
+                        <Input value={saveQuizName} onChange={(e) => setSaveQuizName(e.target.value)}
+                          placeholder="Quiz name..." className="h-8 w-32 bg-white/5 border-white/10 text-white text-xs" />
+                        <Button variant="outline" size="sm" onClick={handleSaveQuiz} disabled={isSavingQuiz}
+                          className="border-white/20 text-gray-300 hover:text-white">
+                          {saveSuccess ? <><Check className="w-4 h-4 mr-1 text-green-400" />Saved!</> :
+                            isSavingQuiz ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> :
+                            <><Bookmark className="w-4 h-4 mr-1" />Save</>}
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button variant="outline" size="sm" onClick={() => { setAuthMode('login'); setShowAuthModal(true) }}
+                        className="border-white/20 text-gray-400 hover:text-white">
+                        <Bookmark className="w-4 h-4 mr-1" />Save Quiz
+                      </Button>
+                    )}
                     <Button variant="outline" size="sm" onClick={generateQuestions} disabled={isGenerating} className="border-white/20 text-gray-300 hover:text-white">
                       <RotateCcw className="w-4 h-4 mr-1" />Regenerate
                     </Button>
@@ -706,6 +1074,14 @@ export default function QuizBlitzApp() {
                   </div>
                 </div>
 
+                {/* Cast to TV button */}
+                {isCreator && (
+                  <Button variant="outline" onClick={() => setShowCastModal(true)}
+                    className="w-full border-purple-500/30 text-purple-300 hover:bg-purple-500/10 hover:text-purple-200 h-11">
+                    <Monitor className="w-5 h-5 mr-2" /> Cast to TV
+                  </Button>
+                )}
+
                 {isCreator ? (
                   <Button onClick={handleStartGame} disabled={players.length < 1}
                     className="w-full h-14 text-lg font-bold bg-gradient-to-r from-quiz-green to-emerald-600 hover:from-quiz-green hover:to-quiz-green text-white shadow-lg shadow-green-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]">
@@ -730,7 +1106,12 @@ export default function QuizBlitzApp() {
             <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
               {currentQuestion.questionNumber} / {currentQuestion.totalQuestions}
             </Badge>
-            <Badge className="bg-white/10 text-gray-300 border-white/20">{categoryName}</Badge>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setShowCastModal(true)} className="text-gray-400 hover:text-purple-300 h-8">
+                <Monitor className="w-4 h-4" />
+              </Button>
+              <Badge className="bg-white/10 text-gray-300 border-white/20">{categoryName}</Badge>
+            </div>
           </div>
 
           {/* Timer */}
