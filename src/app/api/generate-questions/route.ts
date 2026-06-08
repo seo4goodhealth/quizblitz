@@ -2,7 +2,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getBankQuestions } from '@/lib/question-bank'
 
 async function callAI(systemPrompt: string, userPrompt: string): Promise<string | null> {
-  // 1. Try Google Gemini (FREE - 15 requests/minute, no credit card)
+  // 1. Try DeepSeek (super cheap, works globally, OpenAI-compatible)
+  const deepseekKey = process.env.DEEPSEEK_API_KEY
+  if (deepseekKey) {
+    try {
+      const response = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${deepseekKey}`,
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.8,
+          max_tokens: 4000,
+        }),
+      })
+      const data = await response.json()
+      const text = data.choices?.[0]?.message?.content
+      if (text) return text
+    } catch (e) {
+      console.error('DeepSeek API error:', e)
+    }
+  }
+
+  // 2. Try Google Gemini (free tier, but region-restricted)
   const geminiKey = process.env.GEMINI_API_KEY
   if (geminiKey) {
     try {
@@ -30,7 +58,7 @@ async function callAI(systemPrompt: string, userPrompt: string): Promise<string 
     }
   }
 
-  // 2. Try OpenAI (paid, but user may have a key)
+  // 3. Try OpenAI (paid, OpenAI-compatible)
   const openaiKey = process.env.OPENAI_API_KEY
   if (openaiKey) {
     try {
@@ -51,7 +79,7 @@ async function callAI(systemPrompt: string, userPrompt: string): Promise<string 
     }
   }
 
-  // 3. Try z-ai-web-dev-sdk (works in this dev environment)
+  // 4. Try z-ai-web-dev-sdk (works in this dev environment)
   try {
     const ZAI = (await import('z-ai-web-dev-sdk')).default
     const zai = await ZAI.create()
@@ -78,7 +106,7 @@ export async function POST(req: NextRequest) {
     }
 
     // STEP 1: Try AI generation first (if any API key is configured)
-    const hasAI = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY
+    const hasAI = process.env.DEEPSEEK_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY
 
     if (hasAI) {
       const systemPrompt = 'You are a quiz question generator. You generate high-quality, accurate multiple choice questions. You always respond with valid JSON only, no markdown or extra text.'
@@ -141,13 +169,13 @@ Rules:
       return NextResponse.json({ 
         questions: bankQuestions, 
         source: 'bank',
-        note: hasAI ? undefined : 'Using built-in questions. Set GEMINI_API_KEY (free) for AI-generated questions.'
+        note: hasAI ? undefined : 'Using built-in questions. Add a DEEPSEEK_API_KEY for unlimited AI-generated questions.'
       })
     }
 
     // STEP 3: No questions available at all
     return NextResponse.json({ 
-      error: 'No questions available for this category. Please try another category or set up a free Gemini API key at https://aistudio.google.com/apikey',
+      error: 'No questions available for this category. Please try another category.',
       hasAI: false 
     }, { status: 404 })
 
