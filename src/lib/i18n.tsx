@@ -7,10 +7,11 @@ import ro from '../../messages/ro.json'
 import ca from '../../messages/ca.json'
 import it from '../../messages/it.json'
 import fr from '../../messages/fr.json'
+import de from '../../messages/de.json'
 
-export type Locale = 'en' | 'es' | 'ro' | 'ca' | 'it' | 'fr'
+export type Locale = 'en' | 'es' | 'ro' | 'ca' | 'it' | 'fr' | 'de'
 
-const messages: Record<Locale, any> = { en, es, ro, ca, it, fr }
+const messages: Record<Locale, any> = { en, es, ro, ca, it, fr, de }
 
 export const LANGUAGES: { code: Locale; name: string; flag: string }[] = [
   { code: 'en', name: 'English', flag: '🇬🇧' },
@@ -19,6 +20,7 @@ export const LANGUAGES: { code: Locale; name: string; flag: string }[] = [
   { code: 'ca', name: 'Català', flag: '🏴' },
   { code: 'it', name: 'Italiano', flag: '🇮🇹' },
   { code: 'fr', name: 'Français', flag: '🇫🇷' },
+  { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
 ]
 
 // Get nested value from object by dot-notation path
