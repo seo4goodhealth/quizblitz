@@ -126,3 +126,36 @@ Stage Summary:
 - Hall of Fame: Weekly top 50 ranking with podium, accessible from home and leaderboard
 - Performance: 1500ms polling, useRef for answerSubmitted, local answer cache
 - All 6 languages updated with new i18n keys
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Add QuizBlitz to App Store and Google Play
+
+Work Log:
+- Generated AI-powered app icon (lightning bolt on purple gradient) at 1024x1024
+- Created all PWA icons (192x192, 512x512, maskable variants, apple-touch-icon, favicons)
+- Created manifest.json with full app metadata, icons, theme colors, display mode
+- Installed and configured @serwist/next for PWA service worker support
+- Created src/app/sw.ts with runtime caching strategies (fonts, images)
+- Updated next.config.ts to use withSerwist() wrapper with --webpack build
+- Updated layout.tsx with manifest link, theme-color, viewport meta, apple-touch-icon
+- Added PWA metadata (appleWebApp, openGraph, formatDetection)
+- Installed Capacitor core, CLI, Android, iOS platforms
+- Initialized Capacitor with appId=com.quizblitz.app, appName=QuizBlitz
+- Configured capacitor.config.ts with server.url pointing to Vercel deployment
+- Added Android platform with custom mipmap icons, splash screens, network security config
+- Added iOS platform with AppIcon.appiconset (all sizes), Splash.imageset
+- Updated AndroidManifest.xml with INTERNET permission and cleartext traffic support
+- Updated package.json with new name (quizblitz), version (1.0.0), and Capacitor scripts
+- Build verified successfully with webpack mode
+- Pushed all changes to GitHub (auto-deploys to Vercel)
+- Generated comprehensive PDF submission guide (10 sections, 67KB)
+
+Stage Summary:
+- QuizBlitz is now a full PWA with offline caching support
+- Native Android and iOS projects configured via Capacitor
+- App uses remote URL architecture (live Vercel deployment in WebView)
+- PDF guide saved to /home/z/my-project/download/QuizBlitz_App_Store_Submission_Guide.pdf
+- Key scripts: npm run build:cap, npm run cap:open:android, npm run cap:open:ios
+- Total cost for both stores: $124 ($99 Apple/year + $25 Google one-time)
