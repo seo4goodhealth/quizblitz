@@ -181,6 +181,7 @@ export default function QuizBlitzApp() {
 
   // Join error
   const [joinError, setJoinError] = useState('')
+  const [createError, setCreateError] = useState('')
 
   // Code copied state
   const [codeCopied, setCodeCopied] = useState(false)
@@ -401,13 +402,13 @@ export default function QuizBlitzApp() {
     setIsSavingQuiz(true)
     setSaveSuccess(false)
     try {
-      const name = saveQuizName || `${tc(selectedCategory) || 'Quiz'} - ${new Date().toLocaleDateString()}`
+      const name = saveQuizName || `${tc(selectedCategory) || 'Custom Quiz'} - ${new Date().toLocaleDateString()}`
       const res = await fetch('/api/quizzes/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          categoryName: CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory,
+          categoryName: CATEGORIES.find(c => c.id === selectedCategory)?.name || 'Custom',
           questions,
           difficulty,
           timePerQuestion,
@@ -716,13 +717,16 @@ export default function QuizBlitzApp() {
 
   const handleCreateRoom = async () => {
     if (!playerName.trim() || questions.length === 0) return
+    setCreateError('')
     try {
+      // Determine category name: use selected category, or 'Custom' if only custom questions
+      const categoryName = CATEGORIES.find(c => c.id === selectedCategory)?.name || (questions.length > 0 ? 'Custom' : selectedCategory)
       const res = await fetch('/api/game/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerName: playerName.trim(),
-          categoryName: CATEGORIES.find(c => c.id === selectedCategory)?.name || selectedCategory,
+          categoryName,
           questions,
           timePerQuestion,
         }),
@@ -732,12 +736,16 @@ export default function QuizBlitzApp() {
         setPlayerId(data.playerId)
         setRoomCode(data.code)
         setIsCreator(true)
+        setCategoryName(categoryName)
         saveSession(data.playerId, data.code, true, playerName.trim())
         setView('lobby')
         startPolling(data.code, data.playerId)
+      } else if (data.error) {
+        setCreateError(data.error)
       }
     } catch (err) {
       console.error('Failed to create room:', err)
+      setCreateError('Failed to create room. Please try again.')
     }
   }
 
@@ -1396,6 +1404,11 @@ export default function QuizBlitzApp() {
                 </div>
 
                 <div className="mt-6 text-center">
+                  {createError && (
+                    <div className="mb-3 p-3 rounded-lg bg-red-500/20 border border-red-500/30 text-red-300 text-sm">
+                      {createError}
+                    </div>
+                  )}
                   <Button onClick={handleCreateRoom} size="lg" className="h-14 px-12 text-lg font-bold bg-gradient-to-r from-quiz-green to-emerald-600 hover:from-quiz-green hover:to-quiz-green text-white shadow-lg shadow-green-500/20">
                     <Play className="w-5 h-5 mr-2" />{t('create.createRoomStart')}
                   </Button>
