@@ -116,7 +116,8 @@
     "saveQuiz": "Guardar este cuestionario",
     "quizSaved": "¡Cuestionario guardado!",
     "savingQuiz": "Guardando...",
-    "viewHallOfFame": "Salón de la Fama"
+    "viewHallOfFame": "Salón de la Fama",
+    "pointsAvailable": "Puntos máx"
   },
   "results": {
     "title": "Resultados de la pregunta",

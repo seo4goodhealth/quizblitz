@@ -116,7 +116,8 @@
     "saveQuiz": "Sauvegarder ce quiz",
     "quizSaved": "Quiz sauvegardé !",
     "savingQuiz": "Sauvegarde...",
-    "viewHallOfFame": "Panthéon"
+    "viewHallOfFame": "Panthéon",
+    "pointsAvailable": "Pts max"
   },
   "results": {
     "title": "Résultats de la question",

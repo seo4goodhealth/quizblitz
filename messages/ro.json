@@ -116,7 +116,8 @@
     "saveQuiz": "Salvează acest quiz",
     "quizSaved": "Quiz salvat!",
     "savingQuiz": "Se salvează...",
-    "viewHallOfFame": "Sala Famous"
+    "viewHallOfFame": "Sala Famous",
+    "pointsAvailable": "Puncte max"
   },
   "results": {
     "title": "Rezultate întrebare",

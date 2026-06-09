@@ -1544,6 +1544,11 @@ export default function QuizBlitzApp() {
               <span className={`text-2xl font-bold tabular-nums ${answerSubmitted ? 'text-green-400' : timeLeft <= 5 ? 'text-red-400 animate-countdown-pulse' : 'text-white'}`}>
                 {answerSubmitted ? '✓' : `${Math.ceil(timeLeft)}${t('create.seconds')}`}
               </span>
+              {!answerSubmitted && (
+                <span className="text-xs text-yellow-400/70 font-medium">
+                  {t('game.pointsAvailable')}: {Math.round(500 + (timeLeft / currentQuestion.timeLimit) * 500)}
+                </span>
+              )}
             </div>
             <Progress
               value={answerSubmitted ? 100 : (timeLeft / currentQuestion.timeLimit) * 100}

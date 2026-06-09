@@ -180,7 +180,7 @@ export function startGame(code: string, playerId: string): { success: boolean; e
   room.questionStartTime = Date.now()
   room.lastActivity = Date.now()
   room.advanceLock = false
-  room.autoAdvanceAt = Date.now() + (room.questions[0]?.timeLimit || room.timePerQuestion) * 1000 + 2000 // +2s buffer after time limit
+  room.autoAdvanceAt = Date.now() + (room.questions[0]?.timeLimit || room.timePerQuestion) * 1000 // Advance immediately when time expires
 
   return { success: true }
 }
@@ -201,11 +201,11 @@ export function submitAnswer(code: string, playerId: string, answer: string): { 
     answerPlayer.lastAnswer = answer
   }
 
-  // Check if ALL players have answered - if so, schedule auto-advance sooner
+  // Check if ALL players have answered - if so, schedule auto-advance soon
   const allAnswered = room.answers.size >= room.players.size
   if (allAnswered) {
-    // All players answered! Auto-advance in 4 seconds to let them see correct answer feedback
-    room.autoAdvanceAt = Date.now() + 4000
+    // All players answered! Auto-advance in 2 seconds so they can see correct answer feedback
+    room.autoAdvanceAt = Date.now() + 2000
   }
 
   return { success: true, allAnswered }
@@ -229,8 +229,9 @@ function processAdvance(room: GameRoom): { questionResults: any; isFinished: boo
       let points = 0
 
       if (isCorrect) {
+        // Points decrease with time: max 1000 (instant) down to 500 (50% at time limit)
         const timeRatio = Math.max(0, 1 - (answerData.time / (question.timeLimit * 1000)))
-        points = Math.round(100 + timeRatio * 900)
+        points = Math.round(500 + timeRatio * 500)
         p.score += points
         p.correctAnswers += 1
       }
@@ -340,7 +341,7 @@ export function continueToNextQuestion(code: string, playerId: string): { succes
 
   // Set auto-advance time for the new question
   const nextQ = room.questions[room.currentQuestion]
-  room.autoAdvanceAt = Date.now() + (nextQ?.timeLimit || room.timePerQuestion) * 1000 + 2000
+  room.autoAdvanceAt = Date.now() + (nextQ?.timeLimit || room.timePerQuestion) * 1000
 
   return { success: true }
 }
@@ -371,13 +372,13 @@ export function getGameState(code: string, playerId: string): any {
     processAdvance(room)
   }
 
-  // AUTO-CONTINUE CHECK: If showing results for more than 4 seconds, auto-continue
-  if (room.status === 'showing-results' && room.resultsReadyAt > 0 && Date.now() - room.resultsReadyAt >= 4000) {
+  // AUTO-CONTINUE CHECK: If showing results for more than 3 seconds, auto-continue
+  if (room.status === 'showing-results' && room.resultsReadyAt > 0 && Date.now() - room.resultsReadyAt >= 3000) {
     room.status = 'playing'
     room.questionStartTime = Date.now()
     room.advanceLock = false
     const nextQ = room.questions[room.currentQuestion]
-    room.autoAdvanceAt = Date.now() + (nextQ?.timeLimit || room.timePerQuestion) * 1000 + 2000
+    room.autoAdvanceAt = Date.now() + (nextQ?.timeLimit || room.timePerQuestion) * 1000
     room.resultsReadyAt = 0
   }
 

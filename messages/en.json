@@ -116,7 +116,8 @@
     "saveQuiz": "Save this quiz",
     "quizSaved": "Quiz saved!",
     "savingQuiz": "Saving...",
-    "viewHallOfFame": "Hall of Fame"
+    "viewHallOfFame": "Hall of Fame",
+    "pointsAvailable": "Max pts"
   },
   "results": {
     "title": "Question Results",
