@@ -45,3 +45,41 @@ Stage Summary:
 - question-bank.ts updated to use new Bible questions
 - AI generation prompt updated for Bible Quiz category
 - Build passes, needs manual push to GitHub for Vercel deployment
+
+---
+Task ID: 2
+Agent: main
+Task: Fix quiz gameplay - independent timers, session persistence, auto-advance
+
+Work Log:
+- Analyzed full quiz game flow: polling, timer, answer submission, advance/continue mechanics
+- Identified root causes: creator-only dependency for advancing, no session persistence, timer not independent per player
+- Rewrote game-store.ts with:
+  - Auto-advance when time expires (autoAdvanceAt timestamp) or all players answer (2s grace)
+  - Auto-continue from showing-results after 5 seconds
+  - Removed creator-only restriction from advance/continue (any player can trigger)
+  - Added advanceLock to prevent double-advance from concurrent polls
+  - Added reconnectPlayer() function for session restoration
+  - Added totalPlayers to game state response
+  - Added timedOut tracking for players who don't answer
+- Updated page.tsx with:
+  - Session persistence via localStorage (playerId, roomCode, isCreator, playerName)
+  - Reconnection on page refresh using /api/game/reconnect
+  - Independent timer: stops when player answers, continues for others
+  - Removed creator-only auto-advance logic
+  - New "waiting for others" UI showing answer count / total players
+  - Removed creator-only continue button; replaced with auto-continue indicator
+  - Added reconnecting overlay UI
+- Created /api/game/reconnect endpoint
+- Updated TV display page to show answer count out of total players
+- Updated TV state API to include auto-advance check and totalPlayers
+- Added new i18n keys (playersAnswered, waitingForOthers, nextQuestionAuto) in all 6 languages
+- Build verified successfully
+- Force-pushed to GitHub (will trigger Vercel auto-deploy)
+
+Stage Summary:
+- Each player now has independent time to answer within the time limit
+- No more "locked out" when another player answers
+- Auto-advance on timeout or all-answered (no creator dependency)
+- Session persists across page refreshes
+- Results auto-continue after 5 seconds
