@@ -8,6 +8,7 @@ const GT_LANG_CODES: Record<string, string> = {
   ca: 'ca',
   it: 'it',
   fr: 'fr',
+  de: 'de',
 }
 
 export async function POST(req: NextRequest) {

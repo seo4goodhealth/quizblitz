@@ -9,6 +9,7 @@ const LANGUAGE_NAMES: Record<string, string> = {
   ca: 'Catalan (Català)',
   it: 'Italian (Italiano)',
   fr: 'French (Français)',
+  de: 'German (Deutsch)',
 }
 
 const GT_LANG_CODES: Record<string, string> = {
@@ -18,6 +19,7 @@ const GT_LANG_CODES: Record<string, string> = {
   ca: 'ca',
   it: 'it',
   fr: 'fr',
+  de: 'de',
 }
 
 async function callAI(systemPrompt: string, userPrompt: string): Promise<string | null> {
