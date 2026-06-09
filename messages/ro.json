@@ -13,7 +13,8 @@
     "viewAll": "Vezi tot",
     "rejoinGame": "Reintră în ultimul joc",
     "rejoinRoom": "Cameră",
-    "rejoin": "Reintră"
+    "rejoin": "Reintră",
+    "funnyName": "Generează un nume amuzant!"
   },
   "auth": {
     "signIn": "Autentificare",

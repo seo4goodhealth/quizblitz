@@ -13,7 +13,8 @@
     "viewAll": "Ver todo",
     "rejoinGame": "Reunirse a la última partida",
     "rejoinRoom": "Sala",
-    "rejoin": "Reunirse"
+    "rejoin": "Reunirse",
+    "funnyName": "¡Generar nombre divertido!"
   },
   "auth": {
     "signIn": "Iniciar sesión",

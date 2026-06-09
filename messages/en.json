@@ -13,7 +13,8 @@
     "viewAll": "View All",
     "rejoinGame": "Rejoin Last Game",
     "rejoinRoom": "Room",
-    "rejoin": "Rejoin"
+    "rejoin": "Rejoin",
+    "funnyName": "Generate funny name!"
   },
   "auth": {
     "signIn": "Sign In",

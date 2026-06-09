@@ -13,7 +13,8 @@
     "viewAll": "Veure-ho tot",
     "rejoinGame": "Torna a l'última partida",
     "rejoinRoom": "Sala",
-    "rejoin": "Torna-hi"
+    "rejoin": "Torna-hi",
+    "funnyName": "Genera un nom divertit!"
   },
   "auth": {
     "signIn": "Iniciar sessió",
