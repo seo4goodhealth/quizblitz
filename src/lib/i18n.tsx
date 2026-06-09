@@ -57,6 +57,10 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const setLocale = useCallback((newLocale: Locale) => {
     setLocaleState(newLocale)
     localStorage.setItem('quizblitz-locale', newLocale)
+    // Also save in cookie so it persists and server can read it
+    if (typeof document !== 'undefined') {
+      document.cookie = `quizblitz-locale=${newLocale}; path=/; max-age=${365 * 24 * 60 * 60}; SameSite=Lax`
+    }
   }, [])
 
   const t = useCallback((key: string, params?: Record<string, string>): string => {

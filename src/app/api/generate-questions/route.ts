@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBankQuestions } from '@/lib/question-bank'
+import { translate } from '@vitalets/google-translate-api'
 
 const LANGUAGE_NAMES: Record<string, string> = {
   en: 'English',
@@ -8,6 +9,15 @@ const LANGUAGE_NAMES: Record<string, string> = {
   ca: 'Catalan (Català)',
   it: 'Italian (Italiano)',
   fr: 'French (Français)',
+}
+
+const GT_LANG_CODES: Record<string, string> = {
+  en: 'en',
+  es: 'es',
+  ro: 'ro',
+  ca: 'ca',
+  it: 'it',
+  fr: 'fr',
 }
 
 async function callAI(systemPrompt: string, userPrompt: string): Promise<string | null> {
@@ -106,57 +116,47 @@ async function callAI(systemPrompt: string, userPrompt: string): Promise<string 
   }
 }
 
-async function translateQuestionsWithAI(questions: any[], targetLanguage: string): Promise<any[]> {
-  const langName = LANGUAGE_NAMES[targetLanguage] || targetLanguage
-  const systemPrompt = `You are a professional translator. You translate quiz questions accurately while keeping the meaning and educational value. You always respond with valid JSON only, no markdown or extra text.`
-
-  const questionsJson = JSON.stringify(questions.map(q => ({
-    text: q.text,
-    optionA: q.optionA,
-    optionB: q.optionB,
-    optionC: q.optionC,
-    optionD: q.optionD,
-  })))
-
-  const userPrompt = `Translate the following quiz questions to ${langName}. Keep the correctAnswer field the same (don't change optionA/optionB/optionC/optionD keys). Translate ONLY the text, optionA, optionB, optionC, and optionD values.
-
-IMPORTANT: Return ONLY a valid JSON array with the same structure, no markdown, no explanation:
-[
-  {
-    "text": "translated question",
-    "optionA": "translated option A",
-    "optionB": "translated option B",
-    "optionC": "translated option C",
-    "optionD": "translated option D"
-  }
-]
-
-Questions to translate:
-${questionsJson}`
-
-  const content = await callAI(systemPrompt, userPrompt)
-  if (!content) return questions
+/**
+ * Translate questions using the free Google Translate API
+ * Translates each text field individually to preserve structure
+ */
+async function translateQuestionsWithGoogle(
+  questions: any[],
+  targetLang: string
+): Promise<any[]> {
+  const langCode = GT_LANG_CODES[targetLang] || 'en'
+  if (langCode === 'en') return questions
 
   try {
-    const jsonMatch = content.match(/\[[\s\S]*\]/)
-    const jsonStr = jsonMatch ? jsonMatch[0] : content
-    const translated = JSON.parse(jsonStr)
+    const translatedQuestions = await Promise.all(
+      questions.map(async (q) => {
+        try {
+          // Translate all text fields in parallel
+          const [textRes, optARes, optBRes, optCRes, optDRes] = await Promise.all([
+            translate(q.text, { from: 'en', to: langCode }),
+            translate(q.optionA, { from: 'en', to: langCode }),
+            translate(q.optionB, { from: 'en', to: langCode }),
+            translate(q.optionC, { from: 'en', to: langCode }),
+            translate(q.optionD, { from: 'en', to: langCode }),
+          ])
 
-    return questions.map((q, i) => {
-      if (translated[i]) {
-        return {
-          ...q,
-          text: translated[i].text || q.text,
-          optionA: translated[i].optionA || q.optionA,
-          optionB: translated[i].optionB || q.optionB,
-          optionC: translated[i].optionC || q.optionC,
-          optionD: translated[i].optionD || q.optionD,
+          return {
+            ...q,
+            text: textRes.text || q.text,
+            optionA: optARes.text || q.optionA,
+            optionB: optBRes.text || q.optionB,
+            optionC: optCRes.text || q.optionC,
+            optionD: optDRes.text || q.optionD,
+          }
+        } catch (err) {
+          console.error('Failed to translate question:', q.id, err)
+          return q // Return original on error
         }
-      }
-      return q
-    })
-  } catch (e) {
-    console.error('Failed to parse translation, returning original questions', e)
+      })
+    )
+    return translatedQuestions
+  } catch (err) {
+    console.error('Google Translate batch error:', err)
     return questions
   }
 }
@@ -199,7 +199,7 @@ Rules:
 - correctAnswer must be exactly one of: "optionA", "optionB", "optionC", or "optionD"
 - All 4 options must be plausible but only one correct
 - Questions should be interesting and challenging
-- For Bible Quiz category, use accurate biblical references
+- For Bible Quiz category: ALL questions MUST directly reference specific Bible content (books, verses, stories, characters, events, or places). Questions must be answerable from the Bible itself. Include the Bible reference (book and chapter) in your reasoning. Do NOT include general religious knowledge that isn't in the Bible. Every question should be traceable to a specific Bible passage.
 - timeLimit should be between 10-30 seconds based on difficulty
 - ALL text MUST be in ${targetLanguage}
 - Return ONLY the JSON array, no markdown, no explanation`
@@ -235,19 +235,19 @@ Rules:
     const bankQuestions = getBankQuestions(category, count)
 
     if (bankQuestions.length > 0) {
-      // If non-English and AI is available, translate the bank questions
+      // If non-English, translate using free Google Translate API
       let finalQuestions = bankQuestions
-      if (isNonEnglish && hasAI) {
+      if (isNonEnglish) {
         try {
-          finalQuestions = await translateQuestionsWithAI(bankQuestions, locale)
+          finalQuestions = await translateQuestionsWithGoogle(bankQuestions, locale)
         } catch (e) {
-          console.error('Translation failed, returning English questions')
+          console.error('Google Translate failed, returning English questions')
         }
       }
 
       return NextResponse.json({ 
         questions: finalQuestions, 
-        source: isNonEnglish && hasAI ? 'bank-translated' : 'bank',
+        source: isNonEnglish ? 'bank-translated' : 'bank',
         note: hasAI ? undefined : 'Using built-in questions. Add a DEEPSEEK_API_KEY for unlimited AI-generated questions.'
       })
     }

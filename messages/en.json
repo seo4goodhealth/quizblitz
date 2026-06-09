@@ -67,7 +67,20 @@
     "medium": "Medium",
     "hard": "Hard",
     "mixed": "Mixed",
-    "seconds": "s"
+    "seconds": "s",
+    "addCustomQuestion": "Add Custom Question",
+    "customQuestion": "Custom Question",
+    "questionText": "Question text",
+    "questionTextPlaceholder": "Type your question here...",
+    "optionA": "Option A",
+    "optionB": "Option B",
+    "optionC": "Option C",
+    "optionD": "Option D",
+    "optionPlaceholder": "Type an option...",
+    "markCorrect": "Select radio to mark correct answer",
+    "addQuestion": "Add Question",
+    "orAddCustom": "Or add your own questions below",
+    "noQuestionsYet": "No questions yet. Generate some or add your own!"
   },
   "join": {
     "title": "Join a Game",
@@ -90,8 +103,11 @@
     "castToTV": "Cast to TV"
   },
   "game": {
-    "submitted": "Answer submitted! Waiting for results...",
-    "showResults": "Show Results & Next"
+    "submitted": "Answer submitted!",
+    "showResults": "Show Results & Next",
+    "playersAnswered": "players answered",
+    "waitingForOthers": "Waiting for others...",
+    "nextQuestionAuto": "Next question starting soon..."
   },
   "results": {
     "title": "Question Results",

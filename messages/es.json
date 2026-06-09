@@ -67,7 +67,20 @@
     "medium": "Medio",
     "hard": "Difícil",
     "mixed": "Mixto",
-    "seconds": "s"
+    "seconds": "s",
+    "addCustomQuestion": "Añadir pregunta personalizada",
+    "customQuestion": "Pregunta personalizada",
+    "questionText": "Texto de la pregunta",
+    "questionTextPlaceholder": "Escribe tu pregunta aquí...",
+    "optionA": "Opción A",
+    "optionB": "Opción B",
+    "optionC": "Opción C",
+    "optionD": "Opción D",
+    "optionPlaceholder": "Escribe una opción...",
+    "markCorrect": "Selecciona el botón para marcar la respuesta correcta",
+    "addQuestion": "Añadir pregunta",
+    "orAddCustom": "O añade tus propias preguntas abajo",
+    "noQuestionsYet": "Aún no hay preguntas. ¡Genera algunas o añade las tuyas!"
   },
   "join": {
     "title": "Unirse a una partida",
@@ -90,8 +103,11 @@
     "castToTV": "Transmitir a la TV"
   },
   "game": {
-    "submitted": "¡Respuesta enviada! Esperando resultados...",
-    "showResults": "Mostrar resultados y siguiente"
+    "submitted": "¡Respuesta enviada!",
+    "showResults": "Mostrar resultados y siguiente",
+    "playersAnswered": "jugadores respondieron",
+    "waitingForOthers": "Esperando a los demás...",
+    "nextQuestionAuto": "Próxima pregunta comenzando pronto..."
   },
   "results": {
     "title": "Resultados de la pregunta",

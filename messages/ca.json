@@ -67,7 +67,20 @@
     "medium": "Mitjà",
     "hard": "Difícil",
     "mixed": "Mixte",
-    "seconds": "s"
+    "seconds": "s",
+    "addCustomQuestion": "Afegir pregunta personalitzada",
+    "customQuestion": "Pregunta personalitzada",
+    "questionText": "Text de la pregunta",
+    "questionTextPlaceholder": "Escriu la teva pregunta aquí...",
+    "optionA": "Opció A",
+    "optionB": "Opció B",
+    "optionC": "Opció C",
+    "optionD": "Opció D",
+    "optionPlaceholder": "Escriu una opció...",
+    "markCorrect": "Selecciona el botó per marcar la resposta correcta",
+    "addQuestion": "Afegir pregunta",
+    "orAddCustom": "O afegeix les teves pròpies preguntes a continuació",
+    "noQuestionsYet": "Encara no hi ha preguntes. Genera'n algunes o afegeix les teves!"
   },
   "join": {
     "title": "Unir-se a una partida",
@@ -90,8 +103,11 @@
     "castToTV": "Transmetre a la TV"
   },
   "game": {
-    "submitted": "Resposta enviada! S'estan esperant els resultats...",
-    "showResults": "Mostrar resultats i següent"
+    "submitted": "Resposta enviada!",
+    "showResults": "Mostrar resultats i següent",
+    "playersAnswered": "jugadors han respost",
+    "waitingForOthers": "S'està esperant els altres...",
+    "nextQuestionAuto": "La pròxima pregunta començarà aviat..."
   },
   "results": {
     "title": "Resultats de la pregunta",

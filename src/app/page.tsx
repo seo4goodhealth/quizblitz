@@ -88,15 +88,24 @@ const CATEGORIES = [
 ]
 
 // ==================== LANGUAGE SELECTOR COMPONENT ====================
-function LanguageSelector({ compact = false }: { compact?: boolean }) {
+function LanguageSelector({ compact = false, onLocaleChange }: { compact?: boolean; onLocaleChange?: (locale: string) => void }) {
   const { locale, setLocale, t } = useI18n()
+
+  const handleChange = (code: string) => {
+    if (onLocaleChange) {
+      onLocaleChange(code)
+    } else {
+      setLocale(code as any)
+    }
+  }
+
   if (compact) {
     return (
       <div className="flex items-center gap-1">
         {LANGUAGES.map((lang) => (
           <button
             key={lang.code}
-            onClick={() => setLocale(lang.code)}
+            onClick={() => handleChange(lang.code)}
             className={`px-1.5 py-0.5 rounded text-xs transition-all ${
               locale === lang.code
                 ? 'bg-purple-600/30 text-purple-300 ring-1 ring-purple-500/50'
@@ -115,7 +124,7 @@ function LanguageSelector({ compact = false }: { compact?: boolean }) {
       {LANGUAGES.map((lang) => (
         <button
           key={lang.code}
-          onClick={() => setLocale(lang.code)}
+          onClick={() => handleChange(lang.code)}
           className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
             locale === lang.code
               ? 'bg-purple-600/30 text-white ring-1 ring-purple-500/50'
@@ -198,8 +207,120 @@ export default function QuizBlitzApp() {
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuizInfo[]>([])
   const [isLoadingSaved, setIsLoadingSaved] = useState(false)
 
+  // Custom question form state
+  const [showCustomForm, setShowCustomForm] = useState(false)
+  const [customQuestion, setCustomQuestion] = useState({
+    text: '',
+    optionA: '',
+    optionB: '',
+    optionC: '',
+    optionD: '',
+    correctAnswer: 'optionA',
+  })
+
   // Cast modal
   const [showCastModal, setShowCastModal] = useState(false)
+
+  // ==================== SESSION PERSISTENCE ====================
+  const SESSION_KEY = 'quizblitz_session'
+
+  const saveSession = useCallback((pId: string, code: string, creator: boolean, name: string) => {
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({
+        playerId: pId,
+        roomCode: code,
+        isCreator: creator,
+        playerName: name,
+        timestamp: Date.now(),
+      }))
+    } catch (e) {
+      // localStorage not available
+    }
+  }, [])
+
+  const clearSession = useCallback(() => {
+    try {
+      localStorage.removeItem(SESSION_KEY)
+    } catch (e) {
+      // localStorage not available
+    }
+  }, [])
+
+  const loadSession = useCallback((): { playerId: string; roomCode: string; isCreator: boolean; playerName: string } | null => {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY)
+      if (!raw) return null
+      const data = JSON.parse(raw)
+      // Session expires after 2 hours
+      if (Date.now() - data.timestamp > 2 * 60 * 60 * 1000) {
+        localStorage.removeItem(SESSION_KEY)
+        return null
+      }
+      return data
+    } catch (e) {
+      return null
+    }
+  }, [])
+
+  // Reconnect on page load / refresh
+  const [isReconnecting, setIsReconnecting] = useState(false)
+  useEffect(() => {
+    const session = loadSession()
+    if (!session) return
+
+    setIsReconnecting(true)
+    fetch('/api/game/reconnect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: session.roomCode, playerId: session.playerId }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.gameState) {
+          const gs = data.gameState
+          setPlayerId(session.playerId)
+          setRoomCode(session.roomCode)
+          setIsCreator(session.isCreator)
+          setPlayerName(session.playerName)
+          setCategoryName(gs.categoryName || '')
+          setPlayers(gs.players || [])
+          setGameStatus(gs.status)
+
+          if (gs.status === 'playing' && gs.currentQuestion) {
+            setCurrentQuestion(gs.currentQuestion)
+            setTimeLeft(gs.currentQuestion.timeLeft)
+            setTotalQuestions(gs.currentQuestion.totalQuestions)
+            setCurrentQuestionIndex(gs.currentQuestion.questionNumber - 1)
+            setAnswerSubmitted(gs.currentQuestion.hasAnswered)
+            if (gs.currentQuestion.hasAnswered) {
+              // We don't know which answer was selected, but we know they answered
+              setSelectedAnswer('submitted')
+            }
+            setView('game')
+          } else if (gs.status === 'showing-results') {
+            setQuestionResults(gs.questionResults)
+            setView('results')
+          } else if (gs.status === 'finished') {
+            setFinalLeaderboard(gs.leaderboard || [])
+            setView('leaderboard')
+          } else if (gs.status === 'lobby') {
+            setView('lobby')
+          }
+
+          // Resume polling
+          startPolling(session.roomCode, session.playerId)
+        } else {
+          // Session invalid, clear it
+          clearSession()
+        }
+      })
+      .catch(() => {
+        clearSession()
+      })
+      .finally(() => {
+        setIsReconnecting(false)
+      })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ==================== AUTH FUNCTIONS ====================
   const handleAuth = async () => {
@@ -372,13 +493,18 @@ export default function QuizBlitzApp() {
         if (data.status === 'playing' && data.currentQuestion) {
           setCurrentQuestion(prev => {
             if (prev?.id !== data.currentQuestion.id) {
+              // New question detected — reset answer state
               setSelectedAnswer(null)
               setAnswerSubmitted(false)
               setQuestionResults(null)
             }
             return data.currentQuestion
           })
-          setTimeLeft(data.currentQuestion.timeLeft)
+          // Only sync timeLeft from server if we haven't answered yet
+          // After answering, the local timer stops and server time doesn't matter
+          if (!answerSubmitted) {
+            setTimeLeft(data.currentQuestion.timeLeft)
+          }
           setTotalQuestions(data.currentQuestion.totalQuestions)
           setCurrentQuestionIndex(data.currentQuestion.questionNumber - 1)
           if (view !== 'game') setView('game')
@@ -391,6 +517,7 @@ export default function QuizBlitzApp() {
           setFinalLeaderboard(data.leaderboard || [])
           if (view !== 'leaderboard') setView('leaderboard')
           if (pollRef.current) clearInterval(pollRef.current)
+          clearSession()
         } else if (data.status === 'lobby') {
           if (view !== 'lobby') setView('lobby')
         }
@@ -398,7 +525,7 @@ export default function QuizBlitzApp() {
         console.error('Polling error:', err)
       }
     }, 1000)
-  }, [view])
+  }, [view, answerSubmitted, clearSession])
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -411,9 +538,10 @@ export default function QuizBlitzApp() {
     return () => stopPolling()
   }, [stopPolling])
 
-  // Timer countdown
+  // Timer countdown — only runs while player hasn't answered yet
+  // Each player has independent time to answer. Once they submit, their timer stops.
   useEffect(() => {
-    if (view !== 'game' || !currentQuestion) return
+    if (view !== 'game' || !currentQuestion || answerSubmitted) return
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 0.1) return 0
@@ -421,36 +549,16 @@ export default function QuizBlitzApp() {
       })
     }, 100)
     return () => clearInterval(timer)
-  }, [view, currentQuestion?.id])
+  }, [view, currentQuestion?.id, answerSubmitted])
 
-  // Auto-advance for creator when time runs out
-  const autoAdvanceRef = useRef(false)
-  useEffect(() => {
-    if (view !== 'game' || !isCreator || !roomCode || !currentQuestion) return
-    if (timeLeft <= 0 && answerSubmitted && !autoAdvanceRef.current) {
-      autoAdvanceRef.current = true
-      fetch('/api/game/advance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: roomCode, playerId }),
-      }).then(res => res.json()).then(data => {
-        if (data.success) {
-          setQuestionResults(data.questionResults)
-          if (data.isFinished) {
-            setFinalLeaderboard(data.leaderboard || [])
-            setView('leaderboard')
-            stopPolling()
-          } else {
-            setView('results')
-          }
-        }
-        autoAdvanceRef.current = false
-      }).catch(() => { autoAdvanceRef.current = false })
-    }
-  }, [timeLeft, view, isCreator, roomCode, playerId, currentQuestion, answerSubmitted, stopPolling])
+  // No more creator-only auto-advance!
+  // The server handles auto-advance via polling:
+  // - When time expires OR all players answer, the server auto-advances
+  // - The next poll returns status='showing-results' which the client handles
 
   const resetState = useCallback(() => {
     stopPolling()
+    clearSession()
     setView('home')
     setPlayerId('')
     setIsCreator(false)
@@ -472,10 +580,72 @@ export default function QuizBlitzApp() {
     setJoinError('')
     setEditingQuestion(null)
     setEditForm(null)
+    setShowCustomForm(false)
+    setCustomQuestion({ text: '', optionA: '', optionB: '', optionC: '', optionD: '', correctAnswer: 'optionA' })
     setTimeLeft(0)
     setSaveQuizName('')
     setSaveSuccess(false)
-  }, [stopPolling])
+    setOriginalQuestions([])
+    setIsTranslating(false)
+  }, [stopPolling, clearSession])
+
+  // ==================== CUSTOM QUESTIONS ====================
+  const addCustomQuestion = () => {
+    if (!customQuestion.text.trim() || !customQuestion.optionA.trim() || !customQuestion.optionB.trim() || !customQuestion.optionC.trim() || !customQuestion.optionD.trim()) return
+    const newQuestion: Question = {
+      id: `q_custom_${Date.now()}`,
+      text: customQuestion.text.trim(),
+      optionA: customQuestion.optionA.trim(),
+      optionB: customQuestion.optionB.trim(),
+      optionC: customQuestion.optionC.trim(),
+      optionD: customQuestion.optionD.trim(),
+      correctAnswer: customQuestion.correctAnswer,
+      timeLimit,
+      order: questions.length,
+    }
+    setQuestions([...questions, newQuestion])
+    setCustomQuestion({ text: '', optionA: '', optionB: '', optionC: '', optionD: '', correctAnswer: 'optionA' })
+    setShowCustomForm(false)
+  }
+
+  // Store original English questions so we can re-translate when locale changes
+  const [originalQuestions, setOriginalQuestions] = useState<Question[]>([])
+  const [isTranslating, setIsTranslating] = useState(false)
+
+  // ==================== LOCALE CHANGE WITH SERVER-SIDE TRANSLATION ====================
+  const handleLocaleChange = async (newLocale: string) => {
+    const prevLocale = locale
+    setLocale(newLocale as any)
+
+    // If we have questions loaded and the locale actually changed, re-translate them
+    if (questions.length > 0 && newLocale !== prevLocale) {
+      // Use original English questions as source for translation
+      const sourceQuestions = originalQuestions.length > 0 ? originalQuestions : questions
+
+      if (newLocale === 'en') {
+        // Switching back to English — restore originals
+        setQuestions(sourceQuestions)
+      } else {
+        // Translate via server API
+        setIsTranslating(true)
+        try {
+          const res = await fetch('/api/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ questions: sourceQuestions, locale: newLocale }),
+          })
+          const data = await res.json()
+          if (data.questions) {
+            setQuestions(data.questions)
+          }
+        } catch (err) {
+          console.error('Failed to translate questions:', err)
+        } finally {
+          setIsTranslating(false)
+        }
+      }
+    }
+  }
 
   // ==================== API CALLS ====================
   const generateQuestions = async () => {
@@ -495,6 +665,10 @@ export default function QuizBlitzApp() {
       const data = await res.json()
       if (data.questions) {
         setQuestions(data.questions)
+        // Store original English questions for re-translation when locale changes
+        if (locale === 'en' || data.source === 'bank') {
+          setOriginalQuestions(data.questions)
+        }
       }
     } catch (err) {
       console.error('Failed to generate questions:', err)
@@ -504,7 +678,7 @@ export default function QuizBlitzApp() {
   }
 
   const handleCreateRoom = async () => {
-    if (!playerName.trim() || !selectedCategory || questions.length === 0) return
+    if (!playerName.trim() || questions.length === 0) return
     try {
       const res = await fetch('/api/game/create', {
         method: 'POST',
@@ -521,6 +695,7 @@ export default function QuizBlitzApp() {
         setPlayerId(data.playerId)
         setRoomCode(data.code)
         setIsCreator(true)
+        saveSession(data.playerId, data.code, true, playerName.trim())
         setView('lobby')
         startPolling(data.code, data.playerId)
       }
@@ -547,6 +722,7 @@ export default function QuizBlitzApp() {
         setCategoryName(data.categoryName)
         setTotalQuestions(data.totalQuestions)
         setPlayers(data.players)
+        saveSession(data.playerId, data.code, false, playerName.trim())
         setView('lobby')
         startPolling(data.code, data.playerId)
       }
@@ -578,13 +754,15 @@ export default function QuizBlitzApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: roomCode, playerId, answer }),
       })
+      // After answering, the player's timer stops (handled by useEffect)
+      // The server will auto-advance when all players answer or time expires
     } catch (err) {
       console.error('Failed to submit answer:', err)
     }
   }
 
   const handleAdvanceQuestion = async () => {
-    if (!roomCode || !playerId || !isCreator) return
+    if (!roomCode || !playerId) return
     try {
       const res = await fetch('/api/game/advance', {
         method: 'POST',
@@ -598,6 +776,7 @@ export default function QuizBlitzApp() {
           setFinalLeaderboard(data.leaderboard || [])
           setView('leaderboard')
           stopPolling()
+          clearSession()
         } else {
           setView('results')
         }
@@ -608,7 +787,7 @@ export default function QuizBlitzApp() {
   }
 
   const handleContinueToNextQuestion = async () => {
-    if (!roomCode || !playerId || !isCreator) return
+    if (!roomCode || !playerId) return
     try {
       await fetch('/api/game/continue', {
         method: 'POST',
@@ -642,6 +821,15 @@ export default function QuizBlitzApp() {
   // ==================== RENDER ====================
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-950 via-purple-950/30 to-gray-950">
+      {/* Reconnecting overlay */}
+      {isReconnecting && (
+        <div className="fixed inset-0 bg-gray-950/90 z-50 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="w-12 h-12 animate-spin text-purple-400 mx-auto mb-4" />
+            <p className="text-white text-lg font-medium">Reconnecting to game...</p>
+          </div>
+        </div>
+      )}
       {/* ====== AUTH MODAL ====== */}
       <Dialog open={showAuthModal} onOpenChange={setShowAuthModal}>
         <DialogContent className="bg-gray-900 border-white/10 text-white sm:max-w-md">
@@ -835,7 +1023,7 @@ export default function QuizBlitzApp() {
 
           {/* Language Selector on Home */}
           <div className="w-full max-w-md mt-6 animate-slide-up" style={{ animationDelay: '0.15s' }}>
-            <LanguageSelector />
+            <LanguageSelector onLocaleChange={handleLocaleChange} />
           </div>
         </div>
       )}
@@ -848,7 +1036,7 @@ export default function QuizBlitzApp() {
               <Button variant="ghost" onClick={() => { setView('home'); setQuestions([]) }} className="text-gray-400 hover:text-white">
                 <ArrowLeft className="w-4 h-4 mr-2" /> {t('create.back')}
               </Button>
-              <LanguageSelector compact />
+              <LanguageSelector compact onLocaleChange={handleLocaleChange} />
             </div>
 
             <h2 className="text-3xl font-bold text-white mb-2">{t('create.title')}</h2>
@@ -992,6 +1180,71 @@ export default function QuizBlitzApp() {
               </TabsContent>
             </Tabs>
 
+            {/* Add Custom Question Section */}
+            <div className="mb-6">
+              {!showCustomForm ? (
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCustomForm(true)}
+                  className="w-full h-12 border-dashed border-2 border-purple-500/30 text-purple-300 hover:bg-purple-500/10 hover:border-purple-500/50 hover:text-purple-200"
+                >
+                  <Plus className="w-5 h-5 mr-2" />{t('create.addCustomQuestion')}
+                </Button>
+              ) : (
+                <Card className="bg-white/5 border-purple-500/30 border-2 animate-fade-in">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-white text-lg flex items-center gap-2">
+                      <Edit3 className="w-5 h-5 text-purple-400" />{t('create.customQuestion')}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div>
+                      <Label className="text-gray-300 text-sm mb-1 block">{t('create.questionText')}</Label>
+                      <Textarea
+                        value={customQuestion.text}
+                        onChange={(e) => setCustomQuestion(prev => ({ ...prev, text: e.target.value }))}
+                        placeholder={t('create.questionTextPlaceholder')}
+                        className="bg-white/5 border-white/10 text-white min-h-[60px]"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {(['optionA', 'optionB', 'optionC', 'optionD'] as const).map((opt) => (
+                        <div key={opt} className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="custom-correct"
+                            checked={customQuestion.correctAnswer === opt}
+                            onChange={() => setCustomQuestion(prev => ({ ...prev, correctAnswer: opt }))}
+                            className="accent-yellow-400"
+                          />
+                          <Input
+                            value={customQuestion[opt]}
+                            onChange={(e) => setCustomQuestion(prev => ({ ...prev, [opt]: e.target.value }))}
+                            placeholder={t(`create.${opt}`)}
+                            className={`bg-white/5 border-white/10 text-white text-sm ${customQuestion.correctAnswer === opt ? 'border-green-500 ring-1 ring-green-500/30' : ''}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500">{t('create.markCorrect')}</p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={addCustomQuestion}
+                        disabled={!customQuestion.text.trim() || !customQuestion.optionA.trim() || !customQuestion.optionB.trim() || !customQuestion.optionC.trim() || !customQuestion.optionD.trim()}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        <Plus className="w-4 h-4 mr-1" />{t('create.addQuestion')}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => { setShowCustomForm(false); setCustomQuestion({ text: '', optionA: '', optionB: '', optionC: '', optionD: '', correctAnswer: 'optionA' }) }} className="text-gray-400">
+                        {t('create.cancel')}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
             {/* Questions List */}
             {questions.length > 0 && (
               <div className="animate-fade-in">
@@ -1028,6 +1281,12 @@ export default function QuizBlitzApp() {
                 </div>
 
                 <div className="space-y-3">
+                  {isTranslating && (
+                    <div className="flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 rounded-lg p-3 text-purple-300 text-sm">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Translating questions...</span>
+                    </div>
+                  )}
                   {questions.map((q, index) => (
                     <Card key={q.id} className="bg-white/5 border-white/10">
                       <CardContent className="p-4">
@@ -1094,7 +1353,7 @@ export default function QuizBlitzApp() {
               <Button variant="ghost" onClick={() => { setView('home'); setJoinError('') }} className="text-gray-400 hover:text-white">
                 <ArrowLeft className="w-4 h-4 mr-2" />{t('create.back')}
               </Button>
-              <LanguageSelector compact />
+              <LanguageSelector compact onLocaleChange={handleLocaleChange} />
             </div>
             <Card className="bg-white/5 border-white/10">
               <CardHeader><CardTitle className="text-white text-center text-2xl">{t('join.title')}</CardTitle></CardHeader>
@@ -1126,7 +1385,7 @@ export default function QuizBlitzApp() {
             <Card className="bg-white/5 border-white/10 overflow-hidden">
               <div className="bg-gradient-to-r from-quiz-purple to-quiz-blue p-6 text-center relative">
                 <div className="absolute top-3 right-3">
-                  <LanguageSelector compact />
+                  <LanguageSelector compact onLocaleChange={handleLocaleChange} />
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-2">{t('lobby.title')}</h2>
                 <p className="text-white/70">{categoryName}</p>
@@ -1209,7 +1468,7 @@ export default function QuizBlitzApp() {
               {currentQuestion.questionNumber} / {currentQuestion.totalQuestions}
             </Badge>
             <div className="flex items-center gap-2">
-              <LanguageSelector compact />
+              <LanguageSelector compact onLocaleChange={handleLocaleChange} />
               <Button variant="ghost" size="sm" onClick={() => setShowCastModal(true)} className="text-gray-400 hover:text-purple-300 h-8">
                 <Monitor className="w-4 h-4" />
               </Button>
@@ -1217,15 +1476,18 @@ export default function QuizBlitzApp() {
             </div>
           </div>
 
-          {/* Timer */}
+          {/* Timer — independent per player, stops when they answer */}
           <div className="w-full mb-4">
             <div className="flex items-center justify-between mb-1">
-              <Clock className={`w-5 h-5 ${timeLeft <= 5 ? 'text-red-400 animate-countdown-pulse' : 'text-gray-400'}`} />
-              <span className={`text-2xl font-bold tabular-nums ${timeLeft <= 5 ? 'text-red-400 animate-countdown-pulse' : 'text-white'}`}>
-                {Math.ceil(timeLeft)}{t('create.seconds')}
+              <Clock className={`w-5 h-5 ${answerSubmitted ? 'text-green-400' : timeLeft <= 5 ? 'text-red-400 animate-countdown-pulse' : 'text-gray-400'}`} />
+              <span className={`text-2xl font-bold tabular-nums ${answerSubmitted ? 'text-green-400' : timeLeft <= 5 ? 'text-red-400 animate-countdown-pulse' : 'text-white'}`}>
+                {answerSubmitted ? '✓' : `${Math.ceil(timeLeft)}${t('create.seconds')}`}
               </span>
             </div>
-            <Progress value={(timeLeft / currentQuestion.timeLimit) * 100} className={`h-3 ${timeLeft <= 5 ? '[&>div]:bg-red-500' : '[&>div]:bg-quiz-green'}`} />
+            <Progress
+              value={answerSubmitted ? 100 : (timeLeft / currentQuestion.timeLimit) * 100}
+              className={`h-3 ${answerSubmitted ? '[&>div]:bg-green-500' : timeLeft <= 5 ? '[&>div]:bg-red-500' : '[&>div]:bg-quiz-green'}`}
+            />
           </div>
 
           {/* Question */}
@@ -1235,7 +1497,7 @@ export default function QuizBlitzApp() {
             </CardContent>
           </Card>
 
-          {/* Answer Options */}
+          {/* Answer Options — each player answers independently */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
             {[
               { key: 'optionA', value: currentQuestion.optionA, cls: 'quiz-option-red', icon: '▲' },
@@ -1248,7 +1510,7 @@ export default function QuizBlitzApp() {
                 <button key={opt.key} onClick={() => handleSubmitAnswer(opt.key)} disabled={answerSubmitted}
                   className={`${opt.cls} relative p-4 md:p-6 rounded-xl text-white font-bold text-left transition-all
                     ${answerSubmitted && isSelected ? 'ring-4 ring-white scale-[0.98] opacity-90' : ''}
-                    ${answerSubmitted && !isSelected ? 'opacity-60' : ''}
+                    ${answerSubmitted && !isSelected ? 'opacity-50' : ''}
                     ${!answerSubmitted ? 'hover:scale-[1.02] active:scale-[0.98] cursor-pointer' : 'cursor-default'}`}>
                   <div className="flex items-center gap-3">
                     <span className="text-2xl font-black opacity-80">{opt.icon}</span>
@@ -1260,17 +1522,25 @@ export default function QuizBlitzApp() {
             })}
           </div>
 
-          {/* Submitted indicator & Creator advance button */}
+          {/* Waiting for others — shown after answering, no more creator-only buttons */}
           <div className="mt-4 text-center">
-            {answerSubmitted && !isCreator && (
-              <p className="text-gray-400 flex items-center justify-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-green-400" />{t('game.submitted')}
-              </p>
-            )}
-            {isCreator && answerSubmitted && (
-              <Button onClick={handleAdvanceQuestion} className="bg-gradient-to-r from-quiz-purple to-quiz-blue text-white font-bold">
-                <ChevronRight className="w-4 h-4 mr-1" />{t('game.showResults')}
-              </Button>
+            {answerSubmitted && (
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center gap-2 text-green-400">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span className="font-medium">{t('game.submitted')}</span>
+                </div>
+                {currentQuestion.answerCount !== undefined && currentQuestion.totalPlayers && (
+                  <div className="flex items-center gap-2 text-gray-400 text-sm">
+                    <Users className="w-4 h-4" />
+                    <span>{currentQuestion.answerCount} / {currentQuestion.totalPlayers} {t('game.playersAnswered')}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-gray-500 text-xs">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>{t('game.waitingForOthers')}</span>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -1316,21 +1586,13 @@ export default function QuizBlitzApp() {
             </div>
           </div>
 
-          {/* Creator continue button */}
-          {isCreator && (
-            <div className="mt-6 text-center">
-              <Button onClick={handleContinueToNextQuestion} className="bg-gradient-to-r from-quiz-green to-emerald-600 text-white font-bold h-12 px-8 text-lg">
-                <ChevronRight className="w-5 h-5 mr-1" />{t('game.showResults')}
-              </Button>
+          {/* Auto-continue countdown — results show for 5 seconds then next question starts automatically */}
+          <div className="mt-6 text-center">
+            <div className="flex items-center justify-center gap-2 text-gray-400">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">{t('game.nextQuestionAuto')}</span>
             </div>
-          )}
-
-          {!isCreator && (
-            <div className="mt-6 text-center text-gray-400">
-              <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
-              {t('lobby.waitingForCreator')}
-            </div>
-          )}
+          </div>
         </div>
       )}
 

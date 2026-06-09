@@ -404,10 +404,10 @@ function TVPageContent() {
             ))}
           </div>
 
-          {/* Answer count */}
+          {/* Answer count — show how many have answered out of total */}
           <div className="mt-6 text-gray-400 text-lg">
             <Users className="w-5 h-5 inline mr-2" />
-            {currentQuestion.answerCount || 0} {t('tv.answered')}
+            {currentQuestion.answerCount || 0} / {currentQuestion.totalPlayers || players.length} {t('tv.answered')}
           </div>
         </div>
       </div>

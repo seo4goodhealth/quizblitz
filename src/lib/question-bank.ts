@@ -1,6 +1,8 @@
 // Built-in question bank - works for FREE with no API key needed
 // Each category has multiple questions so games feel fresh
 
+import { bibleQuestions } from './bible-questions'
+
 export interface BankQuestion {
   text: string
   optionA: string
@@ -12,28 +14,7 @@ export interface BankQuestion {
 }
 
 export const questionBank: Record<string, BankQuestion[]> = {
-  'Bible Quiz': [
-    { text: 'Who was the first man created in the Bible?', optionA: 'Adam', optionB: 'Abraham', optionC: 'Noah', optionD: 'Moses', correctAnswer: 'optionA', timeLimit: 15 },
-    { text: 'Who was the first woman in the Bible?', optionA: 'Sarah', optionB: 'Ruth', optionC: 'Eve', optionD: 'Mary', correctAnswer: 'optionC', timeLimit: 15 },
-    { text: 'How many days did God take to create the world?', optionA: '5', optionB: '6', optionC: '7', optionD: '10', correctAnswer: 'optionB', timeLimit: 15 },
-    { text: 'Who built the ark to survive the great flood?', optionA: 'Abraham', optionB: 'Moses', optionC: 'David', optionD: 'Noah', correctAnswer: 'optionD', timeLimit: 15 },
-    { text: 'What was the name of the garden where Adam and Eve lived?', optionA: 'Gethsemane', optionB: 'Eden', optionC: 'Canaan', optionD: 'Babylon', correctAnswer: 'optionB', timeLimit: 15 },
-    { text: 'Who parted the Red Sea?', optionA: 'Joshua', optionB: 'Elijah', optionC: 'Moses', optionD: 'Aaron', correctAnswer: 'optionC', timeLimit: 15 },
-    { text: 'How many apostles did Jesus choose?', optionA: '7', optionB: '10', optionC: '12', optionD: '15', correctAnswer: 'optionC', timeLimit: 15 },
-    { text: 'Who betrayed Jesus for 30 pieces of silver?', optionA: 'Peter', optionB: 'Thomas', optionC: 'James', optionD: 'Judas Iscariot', correctAnswer: 'optionD', timeLimit: 15 },
-    { text: 'What is the first book of the Bible?', optionA: 'Exodus', optionB: 'Genesis', optionC: 'Leviticus', optionD: 'Matthew', correctAnswer: 'optionB', timeLimit: 15 },
-    { text: 'Who killed Goliath with a sling and a stone?', optionA: 'Saul', optionB: 'Solomon', optionC: 'David', optionD: 'Samuel', correctAnswer: 'optionC', timeLimit: 15 },
-    { text: 'What fruit is traditionally associated with Adam and Eve\'s sin?', optionA: 'Fig', optionB: 'Apple', optionC: 'Grape', optionD: 'Pomegranate', correctAnswer: 'optionB', timeLimit: 15 },
-    { text: 'Who was swallowed by a great fish?', optionA: 'Elijah', optionB: 'Jonah', optionC: 'Isaiah', optionD: 'Job', correctAnswer: 'optionB', timeLimit: 15 },
-    { text: 'What is the last book of the Bible?', optionA: 'Jude', optionB: 'Acts', optionC: 'Revelation', optionD: 'Hebrews', correctAnswer: 'optionC', timeLimit: 15 },
-    { text: 'Where was Jesus born?', optionA: 'Nazareth', optionB: 'Jerusalem', optionC: 'Bethlehem', optionD: 'Capernaum', correctAnswer: 'optionC', timeLimit: 15 },
-    { text: 'Who was the oldest person in the Bible?', optionA: 'Noah', optionB: 'Abraham', optionC: 'Methuselah', optionD: 'Adam', correctAnswer: 'optionC', timeLimit: 20 },
-    { text: 'What did God give Moses on Mount Sinai?', optionA: 'The Ten Commandments', optionB: 'The Ark of the Covenant', optionC: 'A staff', optionD: 'A crown', correctAnswer: 'optionA', timeLimit: 15 },
-    { text: 'Who was the first king of Israel?', optionA: 'David', optionB: 'Solomon', optionC: 'Saul', optionD: 'Samuel', correctAnswer: 'optionC', timeLimit: 15 },
-    { text: 'What did Jesus turn water into at the wedding at Cana?', optionA: 'Milk', optionB: 'Wine', optionC: 'Oil', optionD: 'Vinegar', correctAnswer: 'optionB', timeLimit: 15 },
-    { text: 'How many plagues were sent upon Egypt?', optionA: '7', optionB: '8', optionC: '10', optionD: '12', correctAnswer: 'optionC', timeLimit: 15 },
-    { text: 'Who was thrown into the lion\'s den?', optionA: 'Daniel', optionB: 'David', optionC: 'Ezekiel', optionD: 'Elijah', correctAnswer: 'optionA', timeLimit: 15 },
-  ],
+  'Bible Quiz': bibleQuestions,
   'Science': [
     { text: 'What is the chemical symbol for water?', optionA: 'H2O', optionB: 'CO2', optionC: 'NaCl', optionD: 'O2', correctAnswer: 'optionA', timeLimit: 10 },
     { text: 'What planet is known as the Red Planet?', optionA: 'Venus', optionB: 'Mars', optionC: 'Jupiter', optionD: 'Saturn', correctAnswer: 'optionB', timeLimit: 10 },

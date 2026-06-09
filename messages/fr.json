@@ -67,7 +67,20 @@
     "medium": "Moyen",
     "hard": "Difficile",
     "mixed": "Mixte",
-    "seconds": "s"
+    "seconds": "s",
+    "addCustomQuestion": "Ajouter une question personnalisée",
+    "customQuestion": "Question personnalisée",
+    "questionText": "Texte de la question",
+    "questionTextPlaceholder": "Tapez votre question ici...",
+    "optionA": "Option A",
+    "optionB": "Option B",
+    "optionC": "Option C",
+    "optionD": "Option D",
+    "optionPlaceholder": "Tapez une option...",
+    "markCorrect": "Sélectionnez le bouton pour marquer la bonne réponse",
+    "addQuestion": "Ajouter la question",
+    "orAddCustom": "Ou ajoutez vos propres questions ci-dessous",
+    "noQuestionsYet": "Aucune question pour l'instant. Générez-en ou ajoutez les vôtres !"
   },
   "join": {
     "title": "Rejoindre une partie",
@@ -90,8 +103,11 @@
     "castToTV": "Diffuser sur la TV"
   },
   "game": {
-    "submitted": "Réponse envoyée ! En attente des résultats...",
-    "showResults": "Afficher les résultats et suivant"
+    "submitted": "Réponse envoyée !",
+    "showResults": "Afficher les résultats et suivant",
+    "playersAnswered": "joueurs ont répondu",
+    "waitingForOthers": "En attente des autres...",
+    "nextQuestionAuto": "Prochaine question bientôt..."
   },
   "results": {
     "title": "Résultats de la question",

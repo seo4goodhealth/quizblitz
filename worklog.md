@@ -1,27 +1,47 @@
 ---
 Task ID: 1
 Agent: Main Agent
-Task: Build QuizBlitz - A Kahoot-style quiz game with room codes, auto-generated questions, and 24 categories
+Task: Examine current question bank and Bible category in codebase
 
 Work Log:
-- Initialized fullstack Next.js project with TypeScript, Tailwind CSS, shadcn/ui
-- Set up Prisma database schema for game rooms, players, and questions
-- Initially built WebSocket-based game service (socket.io on port 3003), but switched to HTTP polling due to Caddy proxy limitations
-- Created comprehensive game store (src/lib/game-store.ts) with globalThis persistence for HMR compatibility
-- Built 7 Next.js API routes for game operations: create, join, start, answer, advance, continue, state
-- Built AI question generation API route using z-ai-web-dev-sdk
-- Created full single-page application with 6 views: Home, Create Game, Join Game, Lobby, Game Play, Results, Leaderboard
-- Implemented 24 quiz categories including Bible Quiz
-- Added question editing/modification features for creators (edit text, options, correct answer, delete)
-- Implemented real-time game state polling (1-second intervals)
-- Added timer countdown, answer submission, scoring with speed bonuses
-- Tested full game flow end-to-end via API and browser
+- Read question-bank.ts: found 20 Bible Quiz questions (generic, not all Bible-referenced)
+- Found 13 categories in the question bank
+- Identified the BankQuestion interface and getBankQuestions function
+- Mapped CATEGORIES in page.tsx (24 categories, 'bible' maps to 'Bible Quiz')
 
 Stage Summary:
-- Working Kahoot-style quiz game at http://localhost:3000
-- 6-digit room codes for joining games
-- AI-powered question auto-generation with customizable count/difficulty/time
-- Full question editing capabilities for creators
-- 24 categories: Bible Quiz, Science, History, Geography, Sports, Music, Movies & TV, Literature, Technology, Mathematics, Animals, Food & Cooking, Art & Culture, Nature & Environment, Space & Astronomy, Mythology, Languages, Health & Medicine, Famous People, Video Games, World Records, Music Theory, Politics & Government, Travel & Landmarks
-- Real-time polling-based game state updates
-- Speed-based scoring system (100-1000 points per correct answer)
+- Current Bible Quiz has only 20 questions, many are generic
+- Need to replace with Bible-only questions referencing specific Bible content
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fetch Bible question data from GitHub repo and Google Sheets
+
+Work Log:
+- Fetched https://github.com/Aftermath001/Bible-app - it's a simple Bible trivia app with book/chapter data, no question bank
+- Fetched Google Sheets spreadsheet - contains 1628 rows of general trivia, very few Bible-specific questions
+- Extracted ~15 Bible-specific questions from the Google Sheets (Goliath, Psalm 23, Moses, Exodus, Genesis, etc.)
+- The Bible-app repo contains Bible book structure (66 books with chapter counts) which can be used for questions
+
+Stage Summary:
+- GitHub repo has book/chapter structure but no question bank
+- Google Sheets has mostly general trivia, ~15 Bible questions found
+- Need to create original Bible-referenced questions using knowledge of Bible content
+---
+Task ID: 3
+Agent: Subagent (full-stack-developer)
+Task: Create comprehensive Bible-only question bank with 200+ questions
+
+Work Log:
+- Created /home/z/my-project/src/lib/bible-questions.ts with 232 Bible-only questions
+- Organized into 11 sub-categories (OT Stories, OT People, OT Places, Psalms/Proverbs, Prophets, Jesus Life, Parables, Apostles, Epistles/Revelation, Bible Books, Bible Numbers)
+- Updated question-bank.ts to import and use bibleQuestions
+- Updated AI prompt in generate-questions/route.ts for strict Bible-only references
+- Build verified successfully
+- Commit created locally but push failed (no GitHub credentials in environment)
+
+Stage Summary:
+- 232 Bible-only questions created, all referencing specific Bible content
+- question-bank.ts updated to use new Bible questions
+- AI generation prompt updated for Bible Quiz category
+- Build passes, needs manual push to GitHub for Vercel deployment

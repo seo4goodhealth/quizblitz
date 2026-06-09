@@ -1,0 +1,18 @@
+{
+  "code": 200,
+  "data": {
+    "description": "",
+    "html": "<html><head><meta name=\"color-scheme\" content=\"light dark\"></head><body><pre style=\"word-wrap: break-word; white-space: pre-wrap;\"># Bible-app\nBible Trivia Application\nWelcome to the Bible Trivia Application! This application is designed to test your knowledge of the Bible through a series of trivia questions. Built with React and Node.js, it provides an interactive platform for users to engage with biblical content in a fun and educational way.\n\nFeatures\nTrivia Questions: Challenge yourself with a variety of trivia questions covering different aspects of the Bible.\nMultiple Choice: Questions are presented in a multiple-choice format, making it easy to select the correct answer.\nScore Tracking: Keep track of your scores and progress as you complete each quiz.\nRandomized Questions: Questions are randomized to ensure each quiz is unique and offers a fresh experience.\nInstallation\nTo run the Bible Trivia Application locally, follow these steps:\n\nClone the repository to your local machine:\nbash\nCopy code\ngit clone https://github.com/your-username/bible-trivia-app.git\nNavigate to the project directory:\nbash\nCopy code\ncd bible-trivia-app\nInstall dependencies for both the client and server:\nbash\nCopy code\ncd client\nnpm install\ncd ../server\nnpm install\nStart the server:\nbash\nCopy code\ncd ../server\nnpm start\nStart the client:\nbash\nCopy code\ncd ../client\nnpm start\nOpen your web browser and go to http://localhost:3000 to access the Bible Trivia Application.\nUsage\nSelect a quiz category from the available options.\nAnswer each trivia question by selecting the correct choice.\nReceive instant feedback on your answers and track your score.\nComplete the quiz to see your final score and review the correct answers.\nContributing\nContributions are welcome! If you'd like to contribute to the Bible Trivia Application, please follow these guidelines:\n\nFork the repository.\nCreate a new branch (git checkout -b feature/new-feature).\nMake your changes.\nCommit your changes (git commit -am 'Add new feature').\nPush to the branch (git push origin feature/new-feature).\nCreate a new Pull Request.\nLicense\nThis project is licensed under the MIT License - see the LICENSE file for details.\n\nAcknowledgements\nReact - JavaScript library for building user interfaces.\nNode.js - JavaScript runtime environment.\nOpen Trivia Database - Source of trivia questions for the application.\n</pre></body></html>",
+    "title": "",
+    "url": "https://raw.githubusercontent.com/Aftermath001/Bible-app/master/README.md",
+    "usage": {
+      "tokens": 497
+    }
+  },
+  "meta": {
+    "usage": {
+      "tokens": 497
+    }
+  },
+  "status": 20000
+}

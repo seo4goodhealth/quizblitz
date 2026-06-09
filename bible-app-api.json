@@ -1,0 +1,19 @@
+{
+  "code": 200,
+  "data": {
+    "description": "",
+    "html": "<html><head><meta name=\"color-scheme\" content=\"light dark\"></head><body><pre style=\"word-wrap: break-word; white-space: pre-wrap;\">[\n  {\n    \"name\": \"README.md\",\n    \"path\": \"README.md\",\n    \"sha\": \"3bcda1acf0e5778aa171a41c52cffa8e16606c65\",\n    \"size\": 2248,\n    \"url\": \"https://api.github.com/repos/Aftermath001/Bible-app/contents/README.md?ref=main\",\n    \"html_url\": \"https://github.com/Aftermath001/Bible-app/blob/main/README.md\",\n    \"git_url\": \"https://api.github.com/repos/Aftermath001/Bible-app/git/blobs/3bcda1acf0e5778aa171a41c52cffa8e16606c65\",\n    \"download_url\": \"https://raw.githubusercontent.com/Aftermath001/Bible-app/main/README.md\",\n    \"type\": \"file\",\n    \"_links\": {\n      \"self\": \"https://api.github.com/repos/Aftermath001/Bible-app/contents/README.md?ref=main\",\n      \"git\": \"https://api.github.com/repos/Aftermath001/Bible-app/git/blobs/3bcda1acf0e5778aa171a41c52cffa8e16606c65\",\n      \"html\": \"https://github.com/Aftermath001/Bible-app/blob/main/README.md\"\n    }\n  },\n  {\n    \"name\": \"bible-app\",\n    \"path\": \"bible-app\",\n    \"sha\": \"7741f449ff486b0ba6e53283aec28170411c93d0\",\n    \"size\": 0,\n    \"url\": \"https://api.github.com/repos/Aftermath001/Bible-app/contents/bible-app?ref=main\",\n    \"html_url\": \"https://github.com/Aftermath001/Bible-app/tree/main/bible-app\",\n    \"git_url\": \"https://api.github.com/repos/Aftermath001/Bible-app/git/trees/7741f449ff486b0ba6e53283aec28170411c93d0\",\n    \"download_url\": null,\n    \"type\": \"dir\",\n    \"_links\": {\n      \"self\": \"https://api.github.com/repos/Aftermath001/Bible-app/contents/bible-app?ref=main\",\n      \"git\": \"https://api.github.com/repos/Aftermath001/Bible-app/git/trees/7741f449ff486b0ba6e53283aec28170411c93d0\",\n      \"html\": \"https://github.com/Aftermath001/Bible-app/tree/main/bible-app\"\n    }\n  }\n]\n</pre></body></html>",
+    "publishedTime": "Fri, 24 May 2024 06:29:30 GMT",
+    "title": "",
+    "url": "https://api.github.com/repos/Aftermath001/Bible-app/contents/",
+    "usage": {
+      "tokens": 599
+    }
+  },
+  "meta": {
+    "usage": {
+      "tokens": 599
+    }
+  },
+  "status": 20000
+}

@@ -67,7 +67,20 @@
     "medium": "Mediu",
     "hard": "Greu",
     "mixed": "Mixt",
-    "seconds": "s"
+    "seconds": "s",
+    "addCustomQuestion": "Adaugă întrebare personalizată",
+    "customQuestion": "Întrebare personalizată",
+    "questionText": "Textul întrebării",
+    "questionTextPlaceholder": "Scrie întrebarea ta aici...",
+    "optionA": "Opțiunea A",
+    "optionB": "Opțiunea B",
+    "optionC": "Opțiunea C",
+    "optionD": "Opțiunea D",
+    "optionPlaceholder": "Scrie o opțiune...",
+    "markCorrect": "Selectează butonul pentru a marca răspunsul corect",
+    "addQuestion": "Adaugă întrebare",
+    "orAddCustom": "Sau adaugă propriile întrebări mai jos",
+    "noQuestionsYet": "Nu sunt întrebări încă. Generează câteva sau adaugă propriile tale!"
   },
   "join": {
     "title": "Intră într-un joc",
@@ -90,8 +103,11 @@
     "castToTV": "Transmite pe TV"
   },
   "game": {
-    "submitted": "Răspuns trimis! Se așteaptă rezultatele...",
-    "showResults": "Arată rezultatele și următoarea"
+    "submitted": "Răspuns trimis!",
+    "showResults": "Arată rezultatele și următoarea",
+    "playersAnswered": "jucători au răspuns",
+    "waitingForOthers": "Se așteaptă ceilalți...",
+    "nextQuestionAuto": "Următoarea întrebare începe curând..."
   },
   "results": {
     "title": "Rezultate întrebare",
