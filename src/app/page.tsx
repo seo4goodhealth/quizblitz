@@ -21,7 +21,7 @@ import {
   FlaskConical, Music, Film, Dumbbell, Utensils, TreePine,
   Rocket, Palette, Landmark, Calculator, PawPrint, Languages,
   Heart, Star, Swords, Award, Mic2, Laptop, Mountain, Shield,
-  Monitor, Bookmark, LogOut, User, FolderOpen,
+  Monitor, Bookmark, LogOut, User, FolderOpen, X,
 } from 'lucide-react'
 import { useI18n, LANGUAGES } from '@/lib/i18n'
 
@@ -229,6 +229,10 @@ export default function QuizBlitzApp() {
   const [isSavingGameQuiz, setIsSavingGameQuiz] = useState(false)
   const [gameQuizSaved, setGameQuizSaved] = useState(false)
   const [gameQuizName, setGameQuizName] = useState('')
+
+  // Quit/Rejoin state
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false)
+  const [lastRoomInfo, setLastRoomInfo] = useState<{ code: string; playerId: string; playerName: string } | null>(null)
 
   // Hall of Fame state
   const [hallOfFameData, setHallOfFameData] = useState<any[]>([])
@@ -487,6 +491,22 @@ export default function QuizBlitzApp() {
     }
   }, [session?.user?.name, playerName])
 
+  // Load last room info from localStorage for rejoin option
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('quizblitz_lastroom')
+      if (saved) {
+        const info = JSON.parse(saved)
+        // Only show rejoin if less than 2 hours old
+        if (info.timestamp && Date.now() - info.timestamp < 2 * 60 * 60 * 1000) {
+          setLastRoomInfo({ code: info.code, playerId: info.playerId, playerName: info.playerName })
+        } else {
+          localStorage.removeItem('quizblitz_lastroom')
+        }
+      }
+    } catch {}
+  }, [])
+
   // ==================== CAST TO TV ====================
   const openTVMode = () => {
     const url = `/tv/${roomCode}`
@@ -625,6 +645,8 @@ export default function QuizBlitzApp() {
     setIsSavingGameQuiz(false)
     setGameQuizSaved(false)
     setGameQuizName('')
+    setCreateError('')
+    setShowQuitConfirm(false)
   }, [stopPolling, clearSession])
 
   // ==================== CUSTOM QUESTIONS ====================
@@ -841,6 +863,96 @@ export default function QuizBlitzApp() {
       })
     } catch (err) {
       console.error('Failed to continue:', err)
+    }
+  }
+
+  // ==================== QUIT & REJOIN ====================
+  const handleQuitGame = async () => {
+    if (!roomCode || !playerId) return
+    try {
+      // Save room info before quitting so we can offer rejoin
+      setLastRoomInfo({ code: roomCode, playerId, playerName: playerName })
+      // Also save to localStorage for persistence across refreshes
+      localStorage.setItem('quizblitz_lastroom', JSON.stringify({ code: roomCode, playerId, playerName, timestamp: Date.now() }))
+
+      await fetch('/api/game/leave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: roomCode, playerId }),
+      })
+    } catch (err) {
+      console.error('Failed to leave room:', err)
+    }
+    // Reset client state
+    stopPolling()
+    clearSession()
+    setView('home')
+    setPlayerId('')
+    setIsCreator(false)
+    setRoomCode('')
+    setCategoryName('')
+    setPlayers([])
+    setCurrentQuestion(null)
+    setSelectedAnswer(null)
+    setAnswerSubmitted(false)
+    setQuestionResults(null)
+    setGameStatus('lobby')
+    setFinalLeaderboard([])
+    setShowQuitConfirm(false)
+  }
+
+  const handleRejoinGame = async () => {
+    if (!lastRoomInfo) return
+    try {
+      const res = await fetch('/api/game/rejoin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: lastRoomInfo.code, playerId: lastRoomInfo.playerId }),
+      })
+      const data = await res.json()
+      if (data.success && data.gameState) {
+        const gs = data.gameState
+        setPlayerId(lastRoomInfo.playerId)
+        setRoomCode(lastRoomInfo.code)
+        setPlayerName(lastRoomInfo.playerName)
+        setIsCreator(gs.isCreator)
+        setCategoryName(gs.categoryName)
+        setPlayers(gs.players || [])
+        setGameStatus(gs.status)
+        saveSession(lastRoomInfo.playerId, lastRoomInfo.code, gs.isCreator, lastRoomInfo.playerName)
+
+        if (gs.status === 'playing' && gs.currentQuestion) {
+          setCurrentQuestion(gs.currentQuestion)
+          setTimeLeft(gs.currentQuestion.timeLeft)
+          setTotalQuestions(gs.currentQuestion.totalQuestions)
+          setCurrentQuestionIndex(gs.currentQuestion.questionNumber - 1)
+          setAnswerSubmitted(gs.currentQuestion.hasAnswered)
+          if (gs.currentQuestion.hasAnswered) {
+            setSelectedAnswer(gs.currentQuestion.lastAnswer || 'submitted')
+          }
+          setView('game')
+        } else if (gs.status === 'showing-results') {
+          setQuestionResults(gs.questionResults)
+          setView('results')
+        } else if (gs.status === 'lobby') {
+          setView('lobby')
+        } else if (gs.status === 'finished') {
+          setFinalLeaderboard(gs.leaderboard || [])
+          setView('leaderboard')
+        }
+
+        startPolling(lastRoomInfo.code, lastRoomInfo.playerId)
+        setLastRoomInfo(null)
+        localStorage.removeItem('quizblitz_lastroom')
+      } else {
+        // Room no longer exists or player was removed
+        setLastRoomInfo(null)
+        localStorage.removeItem('quizblitz_lastroom')
+      }
+    } catch (err) {
+      console.error('Failed to rejoin room:', err)
+      setLastRoomInfo(null)
+      localStorage.removeItem('quizblitz_lastroom')
     }
   }
 
@@ -1064,6 +1176,33 @@ export default function QuizBlitzApp() {
               <LogIn className="w-6 h-6 mr-2" />
               {t('home.joinGame')}
             </Button>
+
+            {/* Rejoin Last Game */}
+            {lastRoomInfo && (
+              <Card className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-500/30 animate-fade-in">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
+                      <RotateCcw className="w-5 h-5 text-green-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-green-300 font-bold text-sm">{t('home.rejoinGame')}</p>
+                      <p className="text-gray-400 text-xs">{t('home.rejoinRoom')}: <span className="text-yellow-400 font-mono font-bold">{lastRoomInfo.code}</span></p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button size="sm" onClick={handleRejoinGame}
+                        className="bg-green-600 hover:bg-green-700 text-white">
+                        <RotateCcw className="w-4 h-4 mr-1" />{t('home.rejoin')}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => { setLastRoomInfo(null); localStorage.removeItem('quizblitz_lastroom') }}
+                        className="text-gray-500 hover:text-red-400">
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <Button
               onClick={async () => {
@@ -1528,6 +1667,26 @@ export default function QuizBlitzApp() {
                     {t('lobby.waitingForCreator')}
                   </div>
                 )}
+
+                {/* Quit Game Button */}
+                {!showQuitConfirm ? (
+                  <Button variant="ghost" onClick={() => setShowQuitConfirm(true)}
+                    className="w-full text-gray-500 hover:text-red-400 hover:bg-red-500/10">
+                    <LogOut className="w-4 h-4 mr-2" />{t('lobby.quitGame')}
+                  </Button>
+                ) : (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-center space-y-3">
+                    <p className="text-red-300 text-sm font-medium">{t('lobby.quitConfirm')}</p>
+                    <div className="flex gap-2 justify-center">
+                      <Button size="sm" onClick={handleQuitGame} className="bg-red-600 hover:bg-red-700 text-white">
+                        <LogOut className="w-4 h-4 mr-1" />{t('lobby.quitYes')}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setShowQuitConfirm(false)} className="text-gray-400 hover:text-white">
+                        {t('lobby.quitNo')}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -1546,6 +1705,27 @@ export default function QuizBlitzApp() {
               <Button variant="ghost" size="sm" onClick={() => setShowCastModal(true)} className="text-gray-400 hover:text-purple-300 h-8">
                 <Monitor className="w-4 h-4" />
               </Button>
+              {!showQuitConfirm ? (
+                <Button variant="ghost" size="sm" onClick={() => setShowQuitConfirm(true)} className="text-gray-500 hover:text-red-400 h-8">
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              ) : (
+                <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setShowQuitConfirm(false)}>
+                  <div className="bg-gray-900 border border-red-500/30 rounded-xl p-6 max-w-sm w-full text-center space-y-4" onClick={e => e.stopPropagation()}>
+                    <LogOut className="w-8 h-8 text-red-400 mx-auto" />
+                    <p className="text-white font-bold">{t('game.quitGame')}</p>
+                    <p className="text-gray-400 text-sm">{t('game.quitConfirm')}</p>
+                    <div className="flex gap-3 justify-center">
+                      <Button onClick={handleQuitGame} className="bg-red-600 hover:bg-red-700 text-white">
+                        <LogOut className="w-4 h-4 mr-1" />{t('game.quitYes')}
+                      </Button>
+                      <Button variant="outline" onClick={() => setShowQuitConfirm(false)} className="border-white/20 text-gray-300">
+                        {t('game.quitNo')}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
               <Badge className="bg-white/10 text-gray-300 border-white/20">{categoryName}</Badge>
             </div>
           </div>

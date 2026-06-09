@@ -10,7 +10,10 @@
     "signIn": "Connectez-vous pour sauvegarder les quiz",
     "signOut": "Se déconnecter",
     "myQuizzes": "Mes quiz",
-    "viewAll": "Voir tout"
+    "viewAll": "Voir tout",
+    "rejoinGame": "Rejoindre la dernière partie",
+    "rejoinRoom": "Salon",
+    "rejoin": "Rejoindre"
   },
   "auth": {
     "signIn": "Se connecter",
@@ -100,7 +103,11 @@
     "timePerQuestion": "Temps / Question",
     "startGame": "Lancer la partie",
     "waitingForCreator": "En attente que le créateur lance la partie...",
-    "castToTV": "Diffuser sur la TV"
+    "castToTV": "Diffuser sur la TV",
+    "quitGame": "Quitter la partie",
+    "quitConfirm": "Êtes-vous sûr de vouloir quitter ? Vous pouvez rejoindre plus tard depuis l'écran d'accueil.",
+    "quitYes": "Oui, quitter",
+    "quitNo": "Annuler"
   },
   "game": {
     "submitted": "Réponse envoyée !",
@@ -117,7 +124,11 @@
     "quizSaved": "Quiz sauvegardé !",
     "savingQuiz": "Sauvegarde...",
     "viewHallOfFame": "Panthéon",
-    "pointsAvailable": "Pts max"
+    "pointsAvailable": "Pts max",
+    "quitGame": "Quitter la partie",
+    "quitConfirm": "Êtes-vous sûr de vouloir quitter ? Votre score sera conservé et vous pourrez rejoindre plus tard.",
+    "quitYes": "Oui, quitter",
+    "quitNo": "Annuler"
   },
   "results": {
     "title": "Résultats de la question",

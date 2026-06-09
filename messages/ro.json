@@ -10,7 +10,10 @@
     "signIn": "Autentifică-te pentru a salva quiz-urile",
     "signOut": "Deconectare",
     "myQuizzes": "Quiz-urile mele",
-    "viewAll": "Vezi tot"
+    "viewAll": "Vezi tot",
+    "rejoinGame": "Reintră în ultimul joc",
+    "rejoinRoom": "Cameră",
+    "rejoin": "Reintră"
   },
   "auth": {
     "signIn": "Autentificare",
@@ -100,7 +103,11 @@
     "timePerQuestion": "Timp / Întrebare",
     "startGame": "Începe jocul",
     "waitingForCreator": "Se așteaptă ca creatorul să pornească jocul...",
-    "castToTV": "Transmite pe TV"
+    "castToTV": "Transmite pe TV",
+    "quitGame": "Părăsește jocul",
+    "quitConfirm": "Sigur vrei să pleci? Poți reintra mai târziu din ecranul principal.",
+    "quitYes": "Da, părăsește",
+    "quitNo": "Anulează"
   },
   "game": {
     "submitted": "Răspuns trimis!",
@@ -117,7 +124,11 @@
     "quizSaved": "Quiz salvat!",
     "savingQuiz": "Se salvează...",
     "viewHallOfFame": "Sala Famous",
-    "pointsAvailable": "Puncte max"
+    "pointsAvailable": "Puncte max",
+    "quitGame": "Părăsește jocul",
+    "quitConfirm": "Sigur vrei să părăsești? Scorul tău va fi păstrat și poți reintra mai târziu.",
+    "quitYes": "Da, părăsește",
+    "quitNo": "Anulează"
   },
   "results": {
     "title": "Rezultate întrebare",

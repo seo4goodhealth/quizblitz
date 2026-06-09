@@ -26,6 +26,7 @@ export interface Player {
   correctAnswers: number
   isCreator: boolean
   lastAnswer?: string // Store last answer for reconnect
+  leftAt?: number // Timestamp when player left (0 = active)
 }
 
 export interface Answer {
@@ -201,10 +202,11 @@ export function submitAnswer(code: string, playerId: string, answer: string): { 
     answerPlayer.lastAnswer = answer
   }
 
-  // Check if ALL players have answered - if so, schedule auto-advance soon
-  const allAnswered = room.answers.size >= room.players.size
+  // Check if ALL ACTIVE players have answered - if so, schedule auto-advance soon
+  const activePlayers = Array.from(room.players.values()).filter(p => !p.leftAt)
+  const allAnswered = activePlayers.length > 0 && room.answers.size >= activePlayers.length
   if (allAnswered) {
-    // All players answered! Auto-advance in 2 seconds so they can see correct answer feedback
+    // All active players answered! Auto-advance in 2 seconds so they can see correct answer feedback
     room.autoAdvanceAt = Date.now() + 2000
   }
 
@@ -394,6 +396,7 @@ export function getGameState(code: string, playerId: string): any {
     playerName: player.name,
     playerScore: player.score,
     timePerQuestion: room.timePerQuestion,
+    hasLeft: !!player.leftAt,
   }
 
   if (room.status === 'playing') {
@@ -466,6 +469,12 @@ export function reconnectPlayer(code: string, playerId: string): { success: bool
   const player = room.players.get(playerId)
   if (!player) return { success: false, error: 'Player not found in room' }
 
+  // If player had left (quit), reactivate them
+  if (player.leftAt) {
+    player.leftAt = 0
+    player.lastAnswer = undefined
+  }
+
   room.lastActivity = Date.now()
 
   // Return the current game state so the client can restore
@@ -473,20 +482,88 @@ export function reconnectPlayer(code: string, playerId: string): { success: bool
   return { success: true, gameState }
 }
 
-export function leaveRoom(code: string, playerId: string): { success: boolean; roomDeleted?: boolean } {
+// Get count of active (non-left) players in a room
+function getActivePlayerCount(room: GameRoom): number {
+  return Array.from(room.players.values()).filter(p => !p.leftAt).length
+}
+
+export function leaveRoom(code: string, playerId: string): { success: boolean; roomDeleted?: boolean; wasCreator?: boolean } {
   const room = rooms.get(code)
   if (!room) return { success: false }
 
   const player = room.players.get(playerId)
   if (!player) return { success: false }
 
-  room.players.delete(playerId)
+  const wasCreator = player.isCreator
+
+  if (room.status === 'lobby') {
+    // In lobby: fully remove the player
+    room.players.delete(playerId)
+    room.lastActivity = Date.now()
+
+    // If creator leaves in lobby, transfer creator role or delete room
+    if (wasCreator) {
+      if (room.players.size > 0) {
+        // Transfer creator to the first remaining player
+        const newCreator = Array.from(room.players.values())[0]
+        newCreator.isCreator = true
+        room.lastActivity = Date.now()
+        return { success: true, roomDeleted: false, wasCreator: true }
+      } else {
+        // No players left, delete room
+        rooms.delete(code)
+        return { success: true, roomDeleted: true, wasCreator: true }
+      }
+    }
+
+    return { success: true, roomDeleted: false, wasCreator: false }
+  } else {
+    // In game (playing/showing-results): mark player as left but keep them for scoring
+    player.leftAt = Date.now()
+    room.lastActivity = Date.now()
+
+    // If creator leaves mid-game, transfer creator role
+    if (wasCreator) {
+      const activePlayers = Array.from(room.players.values()).filter(p => !p.leftAt && p.id !== playerId)
+      if (activePlayers.length > 0) {
+        activePlayers[0].isCreator = true
+      }
+    }
+
+    // Check if all remaining active players have answered — if so, trigger auto-advance
+    const activePlayers = Array.from(room.players.values()).filter(p => !p.leftAt)
+    if (room.status === 'playing' && activePlayers.length > 0) {
+      const activeAnswerCount = Array.from(room.answers.keys()).filter(pId => {
+        const p = room.players.get(pId)
+        return p && !p.leftAt
+      }).length
+      if (activeAnswerCount >= activePlayers.length) {
+        room.autoAdvanceAt = Date.now() + 2000
+      }
+    } else if (activePlayers.length === 0) {
+      // No active players left — delete room
+      rooms.delete(code)
+      return { success: true, roomDeleted: true, wasCreator }
+    }
+
+    return { success: true, roomDeleted: false, wasCreator }
+  }
+}
+
+// Rejoin a room after quitting (reactivates the player)
+export function rejoinRoom(code: string, playerId: string): { success: boolean; error?: string; gameState?: any } {
+  const room = rooms.get(code)
+  if (!room) return { success: false, error: 'Room not found. It may have ended.' }
+
+  const player = room.players.get(playerId)
+  if (!player) return { success: false, error: 'Player not found in this room.' }
+
+  // Reactivate the player
+  player.leftAt = 0 // Clear the left timestamp
+  player.lastAnswer = undefined
   room.lastActivity = Date.now()
 
-  if (player.isCreator || room.players.size === 0) {
-    rooms.delete(code)
-    return { success: true, roomDeleted: true }
-  }
-
-  return { success: true, roomDeleted: false }
+  // Return the current game state
+  const gameState = getGameState(code, playerId)
+  return { success: true, gameState }
 }

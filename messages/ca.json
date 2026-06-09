@@ -10,7 +10,10 @@
     "signIn": "Inicia sessió per desar qüestionaris",
     "signOut": "Tancar sessió",
     "myQuizzes": "Els meus qüestionaris",
-    "viewAll": "Veure-ho tot"
+    "viewAll": "Veure-ho tot",
+    "rejoinGame": "Torna a l'última partida",
+    "rejoinRoom": "Sala",
+    "rejoin": "Torna-hi"
   },
   "auth": {
     "signIn": "Iniciar sessió",
@@ -100,7 +103,11 @@
     "timePerQuestion": "Temps / Pregunta",
     "startGame": "Iniciar partida",
     "waitingForCreator": "S'està esperant que el creador iniciï la partida...",
-    "castToTV": "Transmetre a la TV"
+    "castToTV": "Transmetre a la TV",
+    "quitGame": "Abandonar partida",
+    "quitConfirm": "Estàs segur que vols sortir? Pots tornar-hi més tard des de la pantalla d'inici.",
+    "quitYes": "Sí, abandonar",
+    "quitNo": "Cancel·lar"
   },
   "game": {
     "submitted": "Resposta enviada!",
@@ -117,7 +124,11 @@
     "quizSaved": "Qüestionari desat!",
     "savingQuiz": "Desant...",
     "viewHallOfFame": "Saló de la Fama",
-    "pointsAvailable": "Punts màx"
+    "pointsAvailable": "Punts màx",
+    "quitGame": "Abandonar partida",
+    "quitConfirm": "Estàs segur que vols abandonar? La teva puntuació es conservarà i pots tornar-hi més tard.",
+    "quitYes": "Sí, abandonar",
+    "quitNo": "Cancel·lar"
   },
   "results": {
     "title": "Resultats de la pregunta",
