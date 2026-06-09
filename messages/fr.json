@@ -107,7 +107,16 @@
     "showResults": "Afficher les résultats et suivant",
     "playersAnswered": "joueurs ont répondu",
     "waitingForOthers": "En attente des autres...",
-    "nextQuestionAuto": "Prochaine question bientôt..."
+    "nextQuestionAuto": "Prochaine question bientôt...",
+    "correctAnswer": "Bonne réponse",
+    "youAnsweredCorrect": "Correct ! Bravo !",
+    "youAnsweredWrong": "Mauvaise réponse",
+    "theCorrectAnswerWas": "La bonne réponse était",
+    "pointsEarned": "points gagnés",
+    "saveQuiz": "Sauvegarder ce quiz",
+    "quizSaved": "Quiz sauvegardé !",
+    "savingQuiz": "Sauvegarde...",
+    "viewHallOfFame": "Panthéon"
   },
   "results": {
     "title": "Résultats de la question",
@@ -125,7 +134,14 @@
     "second": "2ème place",
     "third": "3ème place",
     "score": "Score",
-    "correctAnswers": "Correctes"
+    "correctAnswers": "Correctes",
+    "gameSummary": "Résumé de la partie",
+    "category": "Catégorie",
+    "difficulty": "Difficulté",
+    "totalQuestions": "Questions",
+    "saveQuiz": "Sauvegarder le quiz dans le tableau de bord",
+    "quizNamePlaceholder": "Nom du quiz...",
+    "viewHallOfFame": "Voir le Panthéon"
   },
   "cast": {
     "title": "Diffuser sur la TV",
@@ -191,5 +207,20 @@
     "ca": "Català",
     "it": "Italiano",
     "fr": "Français"
+  },
+  "halloffame": {
+    "title": "Panthéon",
+    "weeklyRanking": "Classement hebdomadaire",
+    "weekOf": "Semaine du",
+    "rank": "Rang",
+    "player": "Joueur",
+    "bestScore": "Meilleur score",
+    "gamesPlayed": "Parties",
+    "top50": "Top 50 joueurs cette semaine",
+    "noResults": "Aucune partie jouée cette semaine. Soyez le premier !",
+    "backToHome": "Retour à l'accueil",
+    "champion": "Champion hebdomadaire",
+    "runnerUp": "Deuxième",
+    "thirdPlace": "Troisième"
   }
 }

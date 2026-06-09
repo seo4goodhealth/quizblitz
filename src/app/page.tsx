@@ -57,7 +57,7 @@ interface SavedQuizInfo {
   updatedAt: string
 }
 
-type GameView = 'home' | 'create' | 'join' | 'lobby' | 'game' | 'results' | 'leaderboard'
+type GameView = 'home' | 'create' | 'join' | 'lobby' | 'game' | 'results' | 'leaderboard' | 'halloffame'
 
 // ==================== CATEGORIES (24) ====================
 const CATEGORIES = [
@@ -221,6 +221,24 @@ export default function QuizBlitzApp() {
   // Cast modal
   const [showCastModal, setShowCastModal] = useState(false)
 
+  // Game questions for saving from leaderboard
+  const [gameQuestions, setGameQuestions] = useState<Question[]>([])
+  const [gameCategoryName, setGameCategoryName] = useState('')
+  const [gameDifficulty, setGameDifficulty] = useState('mixed')
+  const [isSavingGameQuiz, setIsSavingGameQuiz] = useState(false)
+  const [gameQuizSaved, setGameQuizSaved] = useState(false)
+  const [gameQuizName, setGameQuizName] = useState('')
+
+  // Hall of Fame state
+  const [hallOfFameData, setHallOfFameData] = useState<any[]>([])
+  const [isLoadingHallOfFame, setIsLoadingHallOfFame] = useState(false)
+  const [hallOfFameWeekStart, setHallOfFameWeekStart] = useState('')
+  const [hallOfFameWeekEnd, setHallOfFameWeekEnd] = useState('')
+
+  // Ref for answerSubmitted to avoid stale closure in polling
+  const answerSubmittedRef = useRef(false)
+  useEffect(() => { answerSubmittedRef.current = answerSubmitted }, [answerSubmitted])
+
   // ==================== SESSION PERSISTENCE ====================
   const SESSION_KEY = 'quizblitz_session'
 
@@ -293,8 +311,8 @@ export default function QuizBlitzApp() {
             setCurrentQuestionIndex(gs.currentQuestion.questionNumber - 1)
             setAnswerSubmitted(gs.currentQuestion.hasAnswered)
             if (gs.currentQuestion.hasAnswered) {
-              // We don't know which answer was selected, but we know they answered
-              setSelectedAnswer('submitted')
+              // Use lastAnswer from server to restore the selected answer
+              setSelectedAnswer(gs.currentQuestion.lastAnswer || 'submitted')
             }
             setView('game')
           } else if (gs.status === 'showing-results') {
@@ -320,7 +338,8 @@ export default function QuizBlitzApp() {
       .finally(() => {
         setIsReconnecting(false)
       })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ==================== AUTH FUNCTIONS ====================
   const handleAuth = async () => {
@@ -502,7 +521,7 @@ export default function QuizBlitzApp() {
           })
           // Only sync timeLeft from server if we haven't answered yet
           // After answering, the local timer stops and server time doesn't matter
-          if (!answerSubmitted) {
+          if (!answerSubmittedRef.current) {
             setTimeLeft(data.currentQuestion.timeLeft)
           }
           setTotalQuestions(data.currentQuestion.totalQuestions)
@@ -515,17 +534,29 @@ export default function QuizBlitzApp() {
           if (view !== 'results') setView('results')
         } else if (data.status === 'finished') {
           setFinalLeaderboard(data.leaderboard || [])
+          // Store questions from the finished game for save feature
+          if (data.questions) {
+            setGameQuestions(data.questions)
+            setGameCategoryName(data.categoryName || '')
+            setGameDifficulty(data.difficulty || 'mixed')
+          }
           if (view !== 'leaderboard') setView('leaderboard')
           if (pollRef.current) clearInterval(pollRef.current)
           clearSession()
+          // Record game results to Hall of Fame
+          fetch('/api/game/record-result', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code }),
+          }).catch(err => console.error('Failed to record game results:', err))
         } else if (data.status === 'lobby') {
           if (view !== 'lobby') setView('lobby')
         }
       } catch (err) {
         console.error('Polling error:', err)
       }
-    }, 1000)
-  }, [view, answerSubmitted, clearSession])
+    }, 1500)
+  }, [view, clearSession])
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -587,6 +618,12 @@ export default function QuizBlitzApp() {
     setSaveSuccess(false)
     setOriginalQuestions([])
     setIsTranslating(false)
+    setGameQuestions([])
+    setGameCategoryName('')
+    setGameDifficulty('mixed')
+    setIsSavingGameQuiz(false)
+    setGameQuizSaved(false)
+    setGameQuizName('')
   }, [stopPolling, clearSession])
 
   // ==================== CUSTOM QUESTIONS ====================
@@ -600,7 +637,7 @@ export default function QuizBlitzApp() {
       optionC: customQuestion.optionC.trim(),
       optionD: customQuestion.optionD.trim(),
       correctAnswer: customQuestion.correctAnswer,
-      timeLimit,
+      timeLimit: timePerQuestion,
       order: questions.length,
     }
     setQuestions([...questions, newQuestion])
@@ -1018,6 +1055,30 @@ export default function QuizBlitzApp() {
             >
               <LogIn className="w-6 h-6 mr-2" />
               {t('home.joinGame')}
+            </Button>
+
+            <Button
+              onClick={async () => {
+                setIsLoadingHallOfFame(true)
+                try {
+                  const res = await fetch('/api/hall-of-fame')
+                  const data = await res.json()
+                  if (data.rankings) {
+                    setHallOfFameData(data.rankings)
+                    setHallOfFameWeekStart(data.weekStart || '')
+                    setHallOfFameWeekEnd(data.weekEnd || '')
+                  }
+                } catch (err) {
+                  console.error('Failed to fetch Hall of Fame:', err)
+                } finally {
+                  setIsLoadingHallOfFame(false)
+                }
+                setView('halloffame')
+              }}
+              variant="outline"
+              className="w-full h-12 text-lg font-bold border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10 hover:text-yellow-300 transition-all"
+            >
+              <Trophy className="w-5 h-5 mr-2" />{t('game.viewHallOfFame')}
             </Button>
           </div>
 
@@ -1497,7 +1558,7 @@ export default function QuizBlitzApp() {
             </CardContent>
           </Card>
 
-          {/* Answer Options — each player answers independently */}
+          {/* Answer Options — each player answers independently, with learn mode feedback */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
             {[
               { key: 'optionA', value: currentQuestion.optionA, cls: 'quiz-option-red', icon: '▲' },
@@ -1506,21 +1567,49 @@ export default function QuizBlitzApp() {
               { key: 'optionD', value: currentQuestion.optionD, cls: 'quiz-option-green', icon: '■' },
             ].map((opt) => {
               const isSelected = selectedAnswer === opt.key
+              const isCorrect = currentQuestion.correctAnswer === opt.key
+              const isWrongSelection = answerSubmitted && isSelected && !isCorrect
+              const isCorrectHighlight = answerSubmitted && isCorrect
               return (
                 <button key={opt.key} onClick={() => handleSubmitAnswer(opt.key)} disabled={answerSubmitted}
-                  className={`${opt.cls} relative p-4 md:p-6 rounded-xl text-white font-bold text-left transition-all
-                    ${answerSubmitted && isSelected ? 'ring-4 ring-white scale-[0.98] opacity-90' : ''}
-                    ${answerSubmitted && !isSelected ? 'opacity-50' : ''}
-                    ${!answerSubmitted ? 'hover:scale-[1.02] active:scale-[0.98] cursor-pointer' : 'cursor-default'}`}>
+                  className={`relative p-4 md:p-6 rounded-xl text-white font-bold text-left transition-all
+                    ${isCorrectHighlight ? 'bg-green-600/80 ring-4 ring-green-400 scale-[0.98]' : ''}
+                    ${isWrongSelection ? 'bg-red-600/80 ring-4 ring-red-400 scale-[0.98]' : ''}
+                    ${answerSubmitted && !isSelected && !isCorrect ? 'opacity-30' : ''}
+                    ${!answerSubmitted && !isCorrectHighlight ? `${opt.cls} hover:scale-[1.02] active:scale-[0.98] cursor-pointer` : ''}
+                    ${!answerSubmitted ? 'cursor-pointer' : 'cursor-default'}`}>
                   <div className="flex items-center gap-3">
                     <span className="text-2xl font-black opacity-80">{opt.icon}</span>
                     <span className="text-base md:text-lg">{opt.value}</span>
                   </div>
-                  {answerSubmitted && isSelected && <div className="absolute top-2 right-2"><Check className="w-6 h-6 text-white" /></div>}
+                  {isCorrectHighlight && <div className="absolute top-2 right-2"><CheckCircle2 className="w-6 h-6 text-green-200" /></div>}
+                  {isWrongSelection && <div className="absolute top-2 right-2"><XCircle className="w-6 h-6 text-red-200" /></div>}
                 </button>
               )
             })}
           </div>
+
+          {/* Learn Mode Feedback Banner — shown after answering */}
+          {answerSubmitted && currentQuestion.correctAnswer && (
+            <div className={`mt-3 p-4 rounded-xl text-center ${selectedAnswer === currentQuestion.correctAnswer ? 'bg-green-500/20 border border-green-500/30' : 'bg-red-500/20 border border-red-500/30'}`}>
+              {selectedAnswer === currentQuestion.correctAnswer ? (
+                <div className="flex items-center justify-center gap-2 text-green-400">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span className="font-bold">{t('game.youAnsweredCorrect')}</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-1">
+                  <div className="flex items-center gap-2 text-red-400">
+                    <XCircle className="w-5 h-5" />
+                    <span className="font-bold">{t('game.youAnsweredWrong')}</span>
+                  </div>
+                  <span className="text-gray-300 text-sm">
+                    {t('game.theCorrectAnswerWas')}: {currentQuestion[currentQuestion.correctAnswer]}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Waiting for others — shown after answering, no more creator-only buttons */}
           <div className="mt-4 text-center">
@@ -1599,48 +1688,90 @@ export default function QuizBlitzApp() {
       {/* ====== FINAL LEADERBOARD VIEW ====== */}
       {view === 'leaderboard' && (
         <div className="flex-1 flex flex-col items-center p-4 max-w-lg mx-auto w-full">
-          <div className="text-center mb-8 animate-slide-up">
-            <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-3" />
+          {/* Confetti-style celebration header */}
+          <div className="text-center mb-6 animate-slide-up">
+            <div className="relative inline-block">
+              <Trophy className="w-20 h-20 text-yellow-400 mx-auto mb-3 drop-shadow-[0_0_20px_rgba(250,204,21,0.4)]" />
+              <Sparkles className="w-6 h-6 text-yellow-300 absolute -top-1 -right-1 animate-pulse" />
+              <Sparkles className="w-4 h-4 text-purple-300 absolute -top-2 left-0 animate-pulse delay-300" />
+            </div>
             <h2 className="text-3xl font-black text-white">{t('leaderboard.title')}</h2>
           </div>
 
-          {/* Podium */}
+          {/* Enhanced Podium */}
           {finalLeaderboard.length >= 1 && (
-            <div className="flex items-end justify-center gap-3 mb-8 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+            <div className="flex items-end justify-center gap-2 sm:gap-4 mb-6 animate-slide-up" style={{ animationDelay: '0.2s' }}>
               {finalLeaderboard[1] && (
-                <div className="text-center w-28">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-gray-900 font-bold text-xl mx-auto mb-2">{finalLeaderboard[1].name.charAt(0).toUpperCase()}</div>
-                  <p className="text-white font-bold text-sm truncate">{finalLeaderboard[1].name}</p>
-                  <p className="text-gray-400 text-xs">{finalLeaderboard[1].score} pts</p>
-                  <div className="bg-gray-400/30 h-20 mt-2 rounded-t-lg flex items-center justify-center"><span className="text-3xl font-black text-gray-300">2</span></div>
+                <div className="text-center w-24 sm:w-28">
+                  <div className="text-xs text-gray-300 mb-1 font-bold">{t('leaderboard.second')}</div>
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-gray-900 font-bold text-xl mx-auto mb-1 ring-2 ring-gray-300/50">{finalLeaderboard[1].name.charAt(0).toUpperCase()}</div>
+                  <p className="text-white font-bold text-xs truncate">{finalLeaderboard[1].name}</p>
+                  <p className="text-gray-300 text-xs font-semibold">{finalLeaderboard[1].score} pts</p>
+                  <div className="bg-gradient-to-t from-gray-400/40 to-gray-400/20 h-20 mt-2 rounded-t-lg flex items-center justify-center"><span className="text-3xl font-black text-gray-300">2</span></div>
                 </div>
               )}
               {finalLeaderboard[0] && (
-                <div className="text-center w-32">
-                  <Crown className="w-10 h-10 text-yellow-400 mx-auto mb-1" />
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 flex items-center justify-center text-gray-900 font-bold text-2xl mx-auto mb-2">{finalLeaderboard[0].name.charAt(0).toUpperCase()}</div>
+                <div className="text-center w-28 sm:w-32">
+                  <Crown className="w-12 h-12 text-yellow-400 mx-auto mb-1 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]" />
+                  <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 flex items-center justify-center text-gray-900 font-bold text-2xl mx-auto mb-1 ring-4 ring-yellow-400/50 shadow-lg shadow-yellow-500/20">{finalLeaderboard[0].name.charAt(0).toUpperCase()}</div>
                   <p className="text-yellow-400 font-bold truncate">{finalLeaderboard[0].name}</p>
-                  <p className="text-yellow-300 text-sm">{finalLeaderboard[0].score} pts</p>
-                  <div className="bg-yellow-400/30 h-28 mt-2 rounded-t-lg flex items-center justify-center"><span className="text-4xl font-black text-yellow-400">1</span></div>
+                  <p className="text-yellow-300 text-sm font-semibold">{finalLeaderboard[0].score} pts</p>
+                  <div className="bg-gradient-to-t from-yellow-400/40 to-yellow-400/20 h-28 mt-2 rounded-t-lg flex items-center justify-center"><span className="text-4xl font-black text-yellow-400">1</span></div>
                 </div>
               )}
               {finalLeaderboard[2] && (
-                <div className="text-center w-28">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-white font-bold text-xl mx-auto mb-2">{finalLeaderboard[2].name.charAt(0).toUpperCase()}</div>
-                  <p className="text-white font-bold text-sm truncate">{finalLeaderboard[2].name}</p>
-                  <p className="text-gray-400 text-xs">{finalLeaderboard[2].score} pts</p>
-                  <div className="bg-amber-500/30 h-14 mt-2 rounded-t-lg flex items-center justify-center"><span className="text-3xl font-black text-amber-500">3</span></div>
+                <div className="text-center w-24 sm:w-28">
+                  <div className="text-xs text-amber-400 mb-1 font-bold">{t('leaderboard.third')}</div>
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-white font-bold text-xl mx-auto mb-1 ring-2 ring-amber-500/50">{finalLeaderboard[2].name.charAt(0).toUpperCase()}</div>
+                  <p className="text-white font-bold text-xs truncate">{finalLeaderboard[2].name}</p>
+                  <p className="text-amber-300 text-xs font-semibold">{finalLeaderboard[2].score} pts</p>
+                  <div className="bg-gradient-to-t from-amber-500/40 to-amber-500/20 h-14 mt-2 rounded-t-lg flex items-center justify-center"><span className="text-3xl font-black text-amber-500">3</span></div>
                 </div>
               )}
             </div>
           )}
 
+          {/* Game Summary Card */}
+          <Card className="bg-white/5 border-white/10 w-full mb-4 animate-slide-up" style={{ animationDelay: '0.3s' }}>
+            <CardContent className="p-4">
+              <h3 className="text-sm font-semibold text-gray-400 mb-2">{t('leaderboard.gameSummary')}</h3>
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <p className="text-white font-bold text-lg">{gameCategoryName || categoryName}</p>
+                  <p className="text-gray-500 text-xs">{t('leaderboard.category')}</p>
+                </div>
+                <div>
+                  <p className="text-white font-bold text-lg">{finalLeaderboard.length > 0 ? finalLeaderboard[0]?.correctAnswers !== undefined ? `${finalLeaderboard.reduce((a: number, p: any) => a + (p.correctAnswers || 0), 0)}` : '-' : '-'}</p>
+                  <p className="text-gray-500 text-xs">{t('leaderboard.difficulty')}</p>
+                </div>
+                <div>
+                  <p className="text-white font-bold text-lg">{gameQuestions.length || totalQuestions}</p>
+                  <p className="text-gray-500 text-xs">{t('leaderboard.totalQuestions')}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Full Leaderboard */}
           <div className="w-full space-y-2 animate-slide-up" style={{ animationDelay: '0.4s' }}>
             {finalLeaderboard.map((p: any) => (
-              <div key={p.id} className={`flex items-center gap-3 p-3 rounded-lg ${p.id === playerId ? 'bg-purple-500/20 border border-purple-500/30' : 'bg-white/5'}`}>
-                <span className={`font-bold text-lg w-8 ${p.rank === 1 ? 'text-yellow-400' : p.rank === 2 ? 'text-gray-300' : p.rank === 3 ? 'text-amber-600' : 'text-gray-500'}`}>{p.rank}</span>
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white font-bold text-sm">{p.name.charAt(0).toUpperCase()}</div>
+              <div key={p.id} className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+                p.rank === 1 ? 'bg-yellow-500/10 border border-yellow-500/20' :
+                p.rank === 2 ? 'bg-gray-400/10 border border-gray-400/20' :
+                p.rank === 3 ? 'bg-amber-500/10 border border-amber-500/20' :
+                p.id === playerId ? 'bg-purple-500/20 border border-purple-500/30' : 'bg-white/5'
+              }`}>
+                <span className={`font-bold text-lg w-8 ${
+                  p.rank === 1 ? 'text-yellow-400' :
+                  p.rank === 2 ? 'text-gray-300' :
+                  p.rank === 3 ? 'text-amber-500' : 'text-gray-500'
+                }`}>{p.rank}</span>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${
+                  p.rank === 1 ? 'bg-gradient-to-br from-yellow-300 to-yellow-500 text-gray-900' :
+                  p.rank === 2 ? 'bg-gradient-to-br from-gray-300 to-gray-400 text-gray-900' :
+                  p.rank === 3 ? 'bg-gradient-to-br from-amber-500 to-amber-700' :
+                  'bg-gradient-to-br from-purple-400 to-pink-400'
+                }`}>{p.name.charAt(0).toUpperCase()}</div>
                 <span className="text-white font-medium flex-1">{p.name}</span>
                 <div className="text-right">
                   <span className="text-yellow-400 font-bold block">{p.score} pts</span>
@@ -1650,8 +1781,201 @@ export default function QuizBlitzApp() {
             ))}
           </div>
 
-          <Button onClick={resetState} className="mt-8 h-12 px-8 text-lg font-bold bg-gradient-to-r from-quiz-purple to-quiz-blue text-white">
-            <RotateCcw className="w-5 h-5 mr-2" />{t('leaderboard.playAgain')}
+          {/* Save Quiz to Dashboard (only for logged-in users) */}
+          {session?.user && gameQuestions.length > 0 && (
+            <div className="w-full mt-6 animate-slide-up" style={{ animationDelay: '0.5s' }}>
+              <Card className="bg-white/5 border-white/10">
+                <CardContent className="p-4">
+                  {!gameQuizSaved ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-purple-300">
+                        <Save className="w-4 h-4" />
+                        <span className="font-semibold text-sm">{t('leaderboard.saveQuiz')}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          value={gameQuizName}
+                          onChange={(e) => setGameQuizName(e.target.value)}
+                          placeholder={`${gameCategoryName || categoryName} - ${new Date().toLocaleDateString()}`}
+                          className="bg-white/5 border-white/10 text-white h-9 text-sm"
+                        />
+                        <Button
+                          onClick={async () => {
+                            if (isSavingGameQuiz) return
+                            setIsSavingGameQuiz(true)
+                            try {
+                              const name = gameQuizName || `${gameCategoryName || categoryName} - ${new Date().toLocaleDateString()}`
+                              const res = await fetch('/api/quizzes/save', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  name,
+                                  categoryName: gameCategoryName || categoryName,
+                                  questions: gameQuestions,
+                                  difficulty: gameDifficulty,
+                                  timePerQuestion: 15,
+                                }),
+                              })
+                              const data = await res.json()
+                              if (!data.error) {
+                                setGameQuizSaved(true)
+                              }
+                            } catch (err) {
+                              console.error('Failed to save game quiz:', err)
+                            } finally {
+                              setIsSavingGameQuiz(false)
+                            }
+                          }}
+                          disabled={isSavingGameQuiz}
+                          className="bg-purple-600 hover:bg-purple-500 text-white h-9 px-4 shrink-0"
+                        >
+                          {isSavingGameQuiz ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-green-400">
+                      <CheckCircle2 className="w-5 h-5" />
+                      <span className="font-semibold">{t('game.quizSaved')}</span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="w-full space-y-3 mt-6 animate-slide-up" style={{ animationDelay: '0.6s' }}>
+            <Button onClick={resetState} className="w-full h-12 text-lg font-bold bg-gradient-to-r from-quiz-purple to-quiz-blue text-white">
+              <RotateCcw className="w-5 h-5 mr-2" />{t('leaderboard.playAgain')}
+            </Button>
+            <Button
+              onClick={async () => {
+                setIsLoadingHallOfFame(true)
+                try {
+                  const res = await fetch('/api/hall-of-fame')
+                  const data = await res.json()
+                  if (data.rankings) {
+                    setHallOfFameData(data.rankings)
+                    setHallOfFameWeekStart(data.weekStart || '')
+                    setHallOfFameWeekEnd(data.weekEnd || '')
+                  }
+                } catch (err) {
+                  console.error('Failed to fetch Hall of Fame:', err)
+                } finally {
+                  setIsLoadingHallOfFame(false)
+                }
+                setView('halloffame')
+              }}
+              variant="outline"
+              className="w-full h-12 border-yellow-500/30 text-yellow-400 hover:bg-yellow-500/10 hover:text-yellow-300"
+            >
+              <Trophy className="w-5 h-5 mr-2" />{t('leaderboard.viewHallOfFame')}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ====== HALL OF FAME VIEW ====== */}
+      {view === 'halloffame' && (
+        <div className="flex-1 flex flex-col items-center p-4 max-w-lg mx-auto w-full">
+          <div className="text-center mb-6 animate-slide-up">
+            <div className="relative inline-block">
+              <Trophy className="w-16 h-16 text-yellow-400 mx-auto mb-3 drop-shadow-[0_0_20px_rgba(250,204,21,0.4)]" />
+            </div>
+            <h2 className="text-3xl font-black text-white">{t('halloffame.title')}</h2>
+            <p className="text-gray-400 text-sm mt-1">{t('halloffame.weeklyRanking')}</p>
+            {hallOfFameWeekStart && (
+              <p className="text-gray-500 text-xs mt-1">
+                {t('halloffame.weekOf')}: {new Date(hallOfFameWeekStart).toLocaleDateString()} - {new Date(hallOfFameWeekEnd).toLocaleDateString()}
+              </p>
+            )}
+          </div>
+
+          {isLoadingHallOfFame ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
+            </div>
+          ) : hallOfFameData.length === 0 ? (
+            <div className="text-center py-20">
+              <Award className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+              <p className="text-gray-400">{t('halloffame.noResults')}</p>
+            </div>
+          ) : (
+            <>
+              {/* Top 3 Podium */}
+              {hallOfFameData.length >= 1 && (
+                <div className="flex items-end justify-center gap-2 sm:gap-4 mb-6 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                  {hallOfFameData[1] && (
+                    <div className="text-center w-24 sm:w-28">
+                      <div className="text-xs text-gray-300 mb-1 font-bold">{t('halloffame.runnerUp')}</div>
+                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-gray-900 font-bold text-lg mx-auto mb-1 ring-2 ring-gray-300/50">{hallOfFameData[1].playerName.charAt(0).toUpperCase()}</div>
+                      <p className="text-white font-bold text-xs truncate">{hallOfFameData[1].playerName}</p>
+                      <p className="text-gray-300 text-xs font-semibold">{hallOfFameData[1].bestScore} pts</p>
+                      <div className="bg-gradient-to-t from-gray-400/40 to-gray-400/20 h-16 mt-2 rounded-t-lg flex items-center justify-center"><span className="text-2xl font-black text-gray-300">2</span></div>
+                    </div>
+                  )}
+                  {hallOfFameData[0] && (
+                    <div className="text-center w-28 sm:w-32">
+                      <Crown className="w-10 h-10 text-yellow-400 mx-auto mb-1" />
+                      <div className="text-xs text-yellow-400 mb-1 font-bold">{t('halloffame.champion')}</div>
+                      <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 flex items-center justify-center text-gray-900 font-bold text-xl mx-auto mb-1 ring-4 ring-yellow-400/50 shadow-lg shadow-yellow-500/20">{hallOfFameData[0].playerName.charAt(0).toUpperCase()}</div>
+                      <p className="text-yellow-400 font-bold text-sm truncate">{hallOfFameData[0].playerName}</p>
+                      <p className="text-yellow-300 text-sm font-semibold">{hallOfFameData[0].bestScore} pts</p>
+                      <div className="bg-gradient-to-t from-yellow-400/40 to-yellow-400/20 h-24 mt-2 rounded-t-lg flex items-center justify-center"><span className="text-3xl font-black text-yellow-400">1</span></div>
+                    </div>
+                  )}
+                  {hallOfFameData[2] && (
+                    <div className="text-center w-24 sm:w-28">
+                      <div className="text-xs text-amber-400 mb-1 font-bold">{t('halloffame.thirdPlace')}</div>
+                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-white font-bold text-lg mx-auto mb-1 ring-2 ring-amber-500/50">{hallOfFameData[2].playerName.charAt(0).toUpperCase()}</div>
+                      <p className="text-white font-bold text-xs truncate">{hallOfFameData[2].playerName}</p>
+                      <p className="text-amber-300 text-xs font-semibold">{hallOfFameData[2].bestScore} pts</p>
+                      <div className="bg-gradient-to-t from-amber-500/40 to-amber-500/20 h-12 mt-2 rounded-t-lg flex items-center justify-center"><span className="text-2xl font-black text-amber-500">3</span></div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Full Ranking List */}
+              <div className="w-full animate-slide-up" style={{ animationDelay: '0.3s' }}>
+                <h3 className="text-sm font-semibold text-gray-400 mb-3 text-center">{t('halloffame.top50')}</h3>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {hallOfFameData.map((entry: any) => (
+                    <div key={entry.rank} className={`flex items-center gap-3 p-3 rounded-lg ${
+                      entry.rank === 1 ? 'bg-yellow-500/10 border border-yellow-500/20' :
+                      entry.rank === 2 ? 'bg-gray-400/10 border border-gray-400/20' :
+                      entry.rank === 3 ? 'bg-amber-500/10 border border-amber-500/20' :
+                      'bg-white/5'
+                    }`}>
+                      <span className={`font-bold text-lg w-8 ${
+                        entry.rank === 1 ? 'text-yellow-400' :
+                        entry.rank === 2 ? 'text-gray-300' :
+                        entry.rank === 3 ? 'text-amber-500' : 'text-gray-500'
+                      }`}>{entry.rank}</span>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                        entry.rank === 1 ? 'bg-gradient-to-br from-yellow-300 to-yellow-500 text-gray-900' :
+                        entry.rank === 2 ? 'bg-gradient-to-br from-gray-300 to-gray-400 text-gray-900' :
+                        entry.rank === 3 ? 'bg-gradient-to-br from-amber-500 to-amber-700 text-white' :
+                        'bg-gradient-to-br from-purple-400 to-pink-400 text-white'
+                      }`}>{entry.playerName.charAt(0).toUpperCase()}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-medium text-sm truncate">{entry.playerName}</p>
+                        <p className="text-gray-500 text-xs">{entry.totalGames} {t('halloffame.gamesPlayed')}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-yellow-400 font-bold">{entry.bestScore}</span>
+                        <p className="text-gray-500 text-xs">{t('halloffame.bestScore')}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          <Button onClick={resetState} className="mt-8 h-12 px-8 font-bold bg-gradient-to-r from-quiz-purple to-quiz-blue text-white">
+            <ArrowLeft className="w-5 h-5 mr-2" />{t('halloffame.backToHome')}
           </Button>
         </div>
       )}

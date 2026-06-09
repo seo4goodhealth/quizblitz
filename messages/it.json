@@ -107,7 +107,16 @@
     "showResults": "Mostra risultati e successiva",
     "playersAnswered": "giocatori hanno risposto",
     "waitingForOthers": "In attesa degli altri...",
-    "nextQuestionAuto": "Prossima domanda a breve..."
+    "nextQuestionAuto": "Prossima domanda a breve...",
+    "correctAnswer": "Risposta corretta",
+    "youAnsweredCorrect": "Corretta! Ben fatto!",
+    "youAnsweredWrong": "Risposta sbagliata",
+    "theCorrectAnswerWas": "La risposta corretta era",
+    "pointsEarned": "punti guadagnati",
+    "saveQuiz": "Salva questo quiz",
+    "quizSaved": "Quiz salvato!",
+    "savingQuiz": "Salvataggio...",
+    "viewHallOfFame": "Hall of Fame"
   },
   "results": {
     "title": "Risultati della domanda",
@@ -125,7 +134,14 @@
     "second": "2º classificato",
     "third": "3º classificato",
     "score": "Punteggio",
-    "correctAnswers": "Corrette"
+    "correctAnswers": "Corrette",
+    "gameSummary": "Riepilogo della partita",
+    "category": "Categoria",
+    "difficulty": "Difficoltà",
+    "totalQuestions": "Domande",
+    "saveQuiz": "Salva quiz nella dashboard",
+    "quizNamePlaceholder": "Nome del quiz...",
+    "viewHallOfFame": "Vedi Hall of Fame"
   },
   "cast": {
     "title": "Trasmetti alla TV",
@@ -191,5 +207,20 @@
     "ca": "Català",
     "it": "Italiano",
     "fr": "Français"
+  },
+  "halloffame": {
+    "title": "Hall of Fame",
+    "weeklyRanking": "Classifica settimanale",
+    "weekOf": "Settimana del",
+    "rank": "Posizione",
+    "player": "Giocatore",
+    "bestScore": "Miglior punteggio",
+    "gamesPlayed": "Partite",
+    "top50": "Top 50 giocatori questa settimana",
+    "noResults": "Nessuna partita giocata questa settimana. Sii il primo!",
+    "backToHome": "Torna alla home",
+    "champion": "Campione settimanale",
+    "runnerUp": "Secondo classificato",
+    "thirdPlace": "Terzo classificato"
   }
 }

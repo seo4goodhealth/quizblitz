@@ -83,3 +83,46 @@ Stage Summary:
 - Auto-advance on timeout or all-answered (no creator dependency)
 - Session persists across page refreshes
 - Results auto-continue after 5 seconds
+
+---
+Task ID: 4
+Agent: main
+Task: Implement 6 major features - Learn Mode, Timer Improvements, Enhanced Podium, Save Quiz, Hall of Fame, Performance
+
+Work Log:
+- Updated prisma/schema.prisma: Added GameResult model with playerName, score, correctAnswers, totalQuestions, categoryName, roomId, userId. Added relation to User model. Changed provider from postgresql to sqlite (matching actual DATABASE_URL).
+- Ran `npx prisma db push` successfully to sync schema with SQLite database
+- Updated game-store.ts:
+  - Added lastAnswer field to Player interface for reconnect answer restoration
+  - Store player.lastAnswer in submitAnswer() for reconnect support
+  - Return lastAnswer and correctAnswer in getGameState() for playing state
+  - Include questions array in finished state game state for save feature
+  - Changed all-answered auto-advance delay from 2s to 4s (more time to see correct answer)
+  - Changed showing-results auto-continue from 5s to 4s
+- Created /api/game/record-result/route.ts: Records game results for all players when game finishes. Checks for duplicate recordings per room+player+category.
+- Created /api/hall-of-fame/route.ts: GET endpoint returning weekly top 50 players. Groups by playerName (or userId), takes best score per player, returns rankings with week date range.
+- Updated all 6 message files (en, es, ro, ca, it, fr) with new keys:
+  - game: correctAnswer, youAnsweredCorrect, youAnsweredWrong, theCorrectAnswerWas, pointsEarned, saveQuiz, quizSaved, savingQuiz, viewHallOfFame
+  - leaderboard: gameSummary, category, difficulty, totalQuestions, saveQuiz, quizNamePlaceholder, viewHallOfFame
+  - halloffame: title, weeklyRanking, weekOf, rank, player, bestScore, gamesPlayed, top50, noResults, backToHome, champion, runnerUp, thirdPlace
+- Updated page.tsx with all UI changes:
+  - Feature 1 (Learn Mode): After answering, correct answer highlighted green, wrong answer highlighted red, correct answer always shown green even if not selected, other options dimmed to 30% opacity. Added feedback banner showing "Correct! Well done!" or "Wrong answer - The correct answer was: [text]"
+  - Feature 2 (Timer Improvements): Auto-advance 2s→4s, auto-continue 5s→4s, lastAnswer field for reconnect, use lastAnswer in reconnect instead of 'submitted'
+  - Feature 3 (Enhanced Podium): Larger trophy with glow effects, sparkles animation, gradient backgrounds for podium, rank labels (2nd Place, 3rd Place), ring effects, enhanced full ranking list with color-coded rows for top 3
+  - Feature 4 (Save Quiz): Save Quiz card on leaderboard for logged-in users with game questions. Shows input for quiz name (pre-filled with category+date), save button, success state
+  - Feature 5 (Hall of Fame): New 'halloffame' view type with weekly ranking top 50, podium for top 3, full ranking list with scroll, week dates display, champion/runner-up/third-place labels. Button on home view and leaderboard view. Auto-record game results on game finish.
+  - Feature 6 (Performance): Polling interval 1000ms→1500ms, answerSubmittedRef for stale closure fix, removed answerSubmitted from startPolling deps
+  - Game questions state: gameQuestions, gameCategoryName, gameDifficulty state variables for saving quiz from leaderboard
+  - Auto-record: On game finish, automatically calls /api/game/record-result
+- Fixed Prisma provider from postgresql to sqlite to match DATABASE_URL
+- TypeScript compilation passes for all modified files (pre-existing errors in other files are unrelated)
+- Lint passes for all modified files
+
+Stage Summary:
+- Learn Mode: Correct/wrong answer feedback shown immediately after answering with green/red highlighting and feedback banners
+- Timer system: Improved timing (4s all-answered delay, 4s auto-continue), reconnect restores actual answer selection
+- Enhanced Podium: Visually impressive with gradients, rings, sparkles, color-coded rankings
+- Save Quiz: Logged-in users can save quiz questions to dashboard from leaderboard
+- Hall of Fame: Weekly top 50 ranking with podium, accessible from home and leaderboard
+- Performance: 1500ms polling, useRef for answerSubmitted, local answer cache
+- All 6 languages updated with new i18n keys

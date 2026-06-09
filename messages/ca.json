@@ -107,7 +107,16 @@
     "showResults": "Mostrar resultats i següent",
     "playersAnswered": "jugadors han respost",
     "waitingForOthers": "S'està esperant els altres...",
-    "nextQuestionAuto": "La pròxima pregunta començarà aviat..."
+    "nextQuestionAuto": "La pròxima pregunta començarà aviat...",
+    "correctAnswer": "Resposta correcta",
+    "youAnsweredCorrect": "Correcta! Ben fet!",
+    "youAnsweredWrong": "Resposta incorrecta",
+    "theCorrectAnswerWas": "La resposta correcta era",
+    "pointsEarned": "punts guanyats",
+    "saveQuiz": "Desar aquest qüestionari",
+    "quizSaved": "Qüestionari desat!",
+    "savingQuiz": "Desant...",
+    "viewHallOfFame": "Saló de la Fama"
   },
   "results": {
     "title": "Resultats de la pregunta",
@@ -125,7 +134,14 @@
     "second": "2n lloc",
     "third": "3r lloc",
     "score": "Puntuació",
-    "correctAnswers": "Correctes"
+    "correctAnswers": "Correctes",
+    "gameSummary": "Resum del joc",
+    "category": "Categoria",
+    "difficulty": "Dificultat",
+    "totalQuestions": "Preguntes",
+    "saveQuiz": "Desar qüestionari al tauler",
+    "quizNamePlaceholder": "Nom del qüestionari...",
+    "viewHallOfFame": "Veure Saló de la Fama"
   },
   "cast": {
     "title": "Transmetre a la TV",
@@ -191,5 +207,20 @@
     "ca": "Català",
     "it": "Italiano",
     "fr": "Français"
+  },
+  "halloffame": {
+    "title": "Saló de la Fama",
+    "weeklyRanking": "Classificació setmanal",
+    "weekOf": "Setmana del",
+    "rank": "Lloc",
+    "player": "Jugador",
+    "bestScore": "Millor puntuació",
+    "gamesPlayed": "Partides",
+    "top50": "Top 50 jugadors aquesta setmana",
+    "noResults": "Encara no hi ha partides aquesta setmana. Sigues el primer!",
+    "backToHome": "Tornar a l'inici",
+    "champion": "Campió setmanal",
+    "runnerUp": "Subcampió",
+    "thirdPlace": "Tercer lloc"
   }
 }

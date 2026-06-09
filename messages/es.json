@@ -107,7 +107,16 @@
     "showResults": "Mostrar resultados y siguiente",
     "playersAnswered": "jugadores respondieron",
     "waitingForOthers": "Esperando a los demás...",
-    "nextQuestionAuto": "Próxima pregunta comenzando pronto..."
+    "nextQuestionAuto": "Próxima pregunta comenzando pronto...",
+    "correctAnswer": "Respuesta correcta",
+    "youAnsweredCorrect": "¡Correcta! ¡Bien hecho!",
+    "youAnsweredWrong": "Respuesta incorrecta",
+    "theCorrectAnswerWas": "La respuesta correcta era",
+    "pointsEarned": "puntos ganados",
+    "saveQuiz": "Guardar este cuestionario",
+    "quizSaved": "¡Cuestionario guardado!",
+    "savingQuiz": "Guardando...",
+    "viewHallOfFame": "Salón de la Fama"
   },
   "results": {
     "title": "Resultados de la pregunta",
@@ -125,7 +134,14 @@
     "second": "2.º puesto",
     "third": "3.º puesto",
     "score": "Puntuación",
-    "correctAnswers": "Correctas"
+    "correctAnswers": "Correctas",
+    "gameSummary": "Resumen del juego",
+    "category": "Categoría",
+    "difficulty": "Dificultad",
+    "totalQuestions": "Preguntas",
+    "saveQuiz": "Guardar cuestionario en el panel",
+    "quizNamePlaceholder": "Nombre del cuestionario...",
+    "viewHallOfFame": "Ver Salón de la Fama"
   },
   "cast": {
     "title": "Transmitir a la TV",
@@ -191,5 +207,20 @@
     "ca": "Català",
     "it": "Italiano",
     "fr": "Français"
+  },
+  "halloffame": {
+    "title": "Salón de la Fama",
+    "weeklyRanking": "Clasificación semanal",
+    "weekOf": "Semana del",
+    "rank": "Puesto",
+    "player": "Jugador",
+    "bestScore": "Mejor puntuación",
+    "gamesPlayed": "Partidas",
+    "top50": "Top 50 jugadores esta semana",
+    "noResults": "Aún no hay partidas esta semana. ¡Sé el primero!",
+    "backToHome": "Volver al inicio",
+    "champion": "Campeón semanal",
+    "runnerUp": "Subcampeón",
+    "thirdPlace": "Tercer puesto"
   }
 }

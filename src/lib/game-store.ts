@@ -25,6 +25,7 @@ export interface Player {
   score: number
   correctAnswers: number
   isCreator: boolean
+  lastAnswer?: string // Store last answer for reconnect
 }
 
 export interface Answer {
@@ -194,11 +195,17 @@ export function submitAnswer(code: string, playerId: string, answer: string): { 
   room.answers.set(playerId, { playerId, answer, time: timeElapsed })
   room.lastActivity = Date.now()
 
+  // Save answer on player for reconnect
+  const answerPlayer = room.players.get(playerId)
+  if (answerPlayer) {
+    answerPlayer.lastAnswer = answer
+  }
+
   // Check if ALL players have answered - if so, schedule auto-advance sooner
   const allAnswered = room.answers.size >= room.players.size
   if (allAnswered) {
-    // All players answered! Auto-advance in 2 seconds to let them see their selection
-    room.autoAdvanceAt = Date.now() + 2000
+    // All players answered! Auto-advance in 4 seconds to let them see correct answer feedback
+    room.autoAdvanceAt = Date.now() + 4000
   }
 
   return { success: true, allAnswered }
@@ -364,8 +371,8 @@ export function getGameState(code: string, playerId: string): any {
     processAdvance(room)
   }
 
-  // AUTO-CONTINUE CHECK: If showing results for more than 5 seconds, auto-continue
-  if (room.status === 'showing-results' && room.resultsReadyAt > 0 && Date.now() - room.resultsReadyAt >= 5000) {
+  // AUTO-CONTINUE CHECK: If showing results for more than 4 seconds, auto-continue
+  if (room.status === 'showing-results' && room.resultsReadyAt > 0 && Date.now() - room.resultsReadyAt >= 4000) {
     room.status = 'playing'
     room.questionStartTime = Date.now()
     room.advanceLock = false
@@ -394,6 +401,7 @@ export function getGameState(code: string, playerId: string): any {
       const elapsed = (Date.now() - room.questionStartTime) / 1000
       const timeLeft = Math.max(0, q.timeLimit - elapsed)
       const hasAnswered = room.answers.has(playerId)
+      const lastAnswer = player.lastAnswer
 
       return {
         ...base,
@@ -404,11 +412,13 @@ export function getGameState(code: string, playerId: string): any {
           optionB: q.optionB,
           optionC: q.optionC,
           optionD: q.optionD,
+          correctAnswer: q.correctAnswer,
           timeLimit: q.timeLimit,
           questionNumber: room.currentQuestion + 1,
           totalQuestions: room.questions.length,
           timeLeft: Math.round(timeLeft * 10) / 10,
           hasAnswered,
+          lastAnswer,
           answerCount: room.answers.size,
           totalPlayers: room.players.size,
         },
@@ -420,6 +430,19 @@ export function getGameState(code: string, playerId: string): any {
     return {
       ...base,
       leaderboard: getLeaderboard(code),
+      questions: room.questions.map(q => ({
+        id: q.id,
+        text: q.text,
+        optionA: q.optionA,
+        optionB: q.optionB,
+        optionC: q.optionC,
+        optionD: q.optionD,
+        correctAnswer: q.correctAnswer,
+        timeLimit: q.timeLimit,
+        order: q.order,
+      })),
+      difficulty: 'mixed',
+      timePerQuestion: room.timePerQuestion,
     }
   }
 

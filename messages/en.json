@@ -107,7 +107,16 @@
     "showResults": "Show Results & Next",
     "playersAnswered": "players answered",
     "waitingForOthers": "Waiting for others...",
-    "nextQuestionAuto": "Next question starting soon..."
+    "nextQuestionAuto": "Next question starting soon...",
+    "correctAnswer": "Correct answer",
+    "youAnsweredCorrect": "Correct! Well done!",
+    "youAnsweredWrong": "Wrong answer",
+    "theCorrectAnswerWas": "The correct answer was",
+    "pointsEarned": "points earned",
+    "saveQuiz": "Save this quiz",
+    "quizSaved": "Quiz saved!",
+    "savingQuiz": "Saving...",
+    "viewHallOfFame": "Hall of Fame"
   },
   "results": {
     "title": "Question Results",
@@ -125,7 +134,14 @@
     "second": "2nd Place",
     "third": "3rd Place",
     "score": "Score",
-    "correctAnswers": "Correct"
+    "correctAnswers": "Correct",
+    "gameSummary": "Game Summary",
+    "category": "Category",
+    "difficulty": "Difficulty",
+    "totalQuestions": "Questions",
+    "saveQuiz": "Save Quiz to Dashboard",
+    "quizNamePlaceholder": "Enter quiz name...",
+    "viewHallOfFame": "View Hall of Fame"
   },
   "cast": {
     "title": "Cast to TV",
@@ -191,5 +207,20 @@
     "ca": "Català",
     "it": "Italiano",
     "fr": "Français"
+  },
+  "halloffame": {
+    "title": "Hall of Fame",
+    "weeklyRanking": "Weekly Ranking",
+    "weekOf": "Week of",
+    "rank": "Rank",
+    "player": "Player",
+    "bestScore": "Best Score",
+    "gamesPlayed": "Games",
+    "top50": "Top 50 Players This Week",
+    "noResults": "No games played this week yet. Be the first!",
+    "backToHome": "Back to Home",
+    "champion": "Weekly Champion",
+    "runnerUp": "Runner Up",
+    "thirdPlace": "Third Place"
   }
 }

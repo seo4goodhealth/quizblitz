@@ -107,7 +107,16 @@
     "showResults": "Arată rezultatele și următoarea",
     "playersAnswered": "jucători au răspuns",
     "waitingForOthers": "Se așteaptă ceilalți...",
-    "nextQuestionAuto": "Următoarea întrebare începe curând..."
+    "nextQuestionAuto": "Următoarea întrebare începe curând...",
+    "correctAnswer": "Răspuns corect",
+    "youAnsweredCorrect": "Corect! Felicitări!",
+    "youAnsweredWrong": "Răspuns greșit",
+    "theCorrectAnswerWas": "Răspunsul corect era",
+    "pointsEarned": "puncte câștigate",
+    "saveQuiz": "Salvează acest quiz",
+    "quizSaved": "Quiz salvat!",
+    "savingQuiz": "Se salvează...",
+    "viewHallOfFame": "Sala Famous"
   },
   "results": {
     "title": "Rezultate întrebare",
@@ -125,7 +134,14 @@
     "second": "Locul 2",
     "third": "Locul 3",
     "score": "Scor",
-    "correctAnswers": "Corecte"
+    "correctAnswers": "Corecte",
+    "gameSummary": "Rezumatul jocului",
+    "category": "Categorie",
+    "difficulty": "Dificultate",
+    "totalQuestions": "Întrebări",
+    "saveQuiz": "Salvează quiz în dashboard",
+    "quizNamePlaceholder": "Numele quiz-ului...",
+    "viewHallOfFame": "Vezi Sala Famous"
   },
   "cast": {
     "title": "Transmite pe TV",
@@ -191,5 +207,20 @@
     "ca": "Català",
     "it": "Italiano",
     "fr": "Français"
+  },
+  "halloffame": {
+    "title": "Sala Famous",
+    "weeklyRanking": "Clasament săptămânal",
+    "weekOf": "Săptămâna din",
+    "rank": "Loc",
+    "player": "Jucător",
+    "bestScore": "Cel mai bun scor",
+    "gamesPlayed": "Jocuri",
+    "top50": "Top 50 jucători săptămâna aceasta",
+    "noResults": "Nu s-au jucat jocuri săptămâna aceasta încă. Fii primul!",
+    "backToHome": "Înapoi la prima pagină",
+    "champion": "Campion săptămânal",
+    "runnerUp": "Locul 2",
+    "thirdPlace": "Locul 3"
   }
 }
