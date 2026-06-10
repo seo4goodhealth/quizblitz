@@ -115,6 +115,7 @@
     "showResults": "Mostrar resultados y siguiente",
     "playersAnswered": "jugadores respondieron",
     "waitingForOthers": "Esperando a los demás...",
+    "waitingForReveal": "¡Respuesta bloqueada! Esperando revelación...",
     "nextQuestionAuto": "Próxima pregunta comenzando pronto...",
     "correctAnswer": "Respuesta correcta",
     "youAnsweredCorrect": "¡Correcta! ¡Bien hecho!",

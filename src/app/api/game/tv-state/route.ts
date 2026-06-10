@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
               let points = 0
               if (isCorrect) {
                 const timeRatio = Math.max(0, 1 - (answerData.time / (question.timeLimit * 1000)))
-                points = Math.round(100 + timeRatio * 900)
+                points = Math.round(500 + timeRatio * 500)
                 p.score += points
                 p.correctAnswers += 1
               }
@@ -66,13 +66,13 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Auto-continue from showing-results after 5 seconds
-    if (room.status === 'showing-results' && room.resultsReadyAt > 0 && Date.now() - room.resultsReadyAt >= 5000) {
+    // Auto-continue from showing-results after 2 seconds
+    if (room.status === 'showing-results' && room.resultsReadyAt > 0 && Date.now() - room.resultsReadyAt >= 2000) {
       room.status = 'playing'
       room.questionStartTime = Date.now()
       room.advanceLock = false
       const nextQ = room.questions[room.currentQuestion]
-      room.autoAdvanceAt = Date.now() + (nextQ?.timeLimit || room.timePerQuestion) * 1000 + 2000
+      room.autoAdvanceAt = Date.now() + (nextQ?.timeLimit || room.timePerQuestion) * 1000
       room.resultsReadyAt = 0
     }
 

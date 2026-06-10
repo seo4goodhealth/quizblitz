@@ -331,8 +331,8 @@ export function continueToNextQuestion(code: string, playerId: string): { succes
 
   if (room.status !== 'showing-results') return { success: false, error: 'Not in showing-results state' }
 
-  // Wait at least 3 seconds on results before continuing
-  if (room.resultsReadyAt && Date.now() - room.resultsReadyAt < 3000) {
+  // Wait at least 2 seconds on results before continuing
+  if (room.resultsReadyAt && Date.now() - room.resultsReadyAt < 2000) {
     return { success: false, error: 'Please wait a moment before continuing' }
   }
 
@@ -374,8 +374,8 @@ export function getGameState(code: string, playerId: string): any {
     processAdvance(room)
   }
 
-  // AUTO-CONTINUE CHECK: If showing results for more than 3 seconds, auto-continue
-  if (room.status === 'showing-results' && room.resultsReadyAt > 0 && Date.now() - room.resultsReadyAt >= 3000) {
+  // AUTO-CONTINUE CHECK: If showing results for more than 2 seconds, auto-continue
+  if (room.status === 'showing-results' && room.resultsReadyAt > 0 && Date.now() - room.resultsReadyAt >= 2000) {
     room.status = 'playing'
     room.questionStartTime = Date.now()
     room.advanceLock = false
@@ -407,6 +407,10 @@ export function getGameState(code: string, playerId: string): any {
       const hasAnswered = room.answers.has(playerId)
       const lastAnswer = player.lastAnswer
 
+      // Check if all active players have answered (for client display)
+      const activePlayers = Array.from(room.players.values()).filter(p => !p.leftAt)
+      const allAnswered = activePlayers.length > 0 && room.answers.size >= activePlayers.length
+
       return {
         ...base,
         currentQuestion: {
@@ -416,7 +420,8 @@ export function getGameState(code: string, playerId: string): any {
           optionB: q.optionB,
           optionC: q.optionC,
           optionD: q.optionD,
-          correctAnswer: q.correctAnswer,
+          // correctAnswer is NOT sent during playing state to prevent cheating
+          // It's only revealed in showing-results state
           timeLimit: q.timeLimit,
           questionNumber: room.currentQuestion + 1,
           totalQuestions: room.questions.length,
@@ -425,6 +430,7 @@ export function getGameState(code: string, playerId: string): any {
           lastAnswer,
           answerCount: room.answers.size,
           totalPlayers: room.players.size,
+          allAnswered,
         },
       }
     }

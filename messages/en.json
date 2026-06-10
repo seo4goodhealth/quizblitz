@@ -115,6 +115,7 @@
     "showResults": "Show Results & Next",
     "playersAnswered": "players answered",
     "waitingForOthers": "Waiting for others...",
+    "waitingForReveal": "Answer locked in! Waiting for reveal...",
     "nextQuestionAuto": "Next question starting soon...",
     "correctAnswer": "Correct answer",
     "youAnsweredCorrect": "Correct! Well done!",

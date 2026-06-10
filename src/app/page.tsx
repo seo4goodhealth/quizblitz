@@ -34,7 +34,7 @@ interface Question {
   optionB: string
   optionC: string
   optionD: string
-  correctAnswer: string
+  correctAnswer?: string // Only available in showing-results, NOT during playing
   timeLimit: number
   order: number
 }
@@ -1785,7 +1785,7 @@ export default function QuizBlitzApp() {
             </CardContent>
           </Card>
 
-          {/* Answer Options — each player answers independently, with learn mode feedback */}
+          {/* Answer Options — correct answer is NOT revealed until all players answer or time expires */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
             {[
               { key: 'optionA', value: currentQuestion.optionA, cls: 'quiz-option-red', icon: '▲' },
@@ -1794,47 +1794,30 @@ export default function QuizBlitzApp() {
               { key: 'optionD', value: currentQuestion.optionD, cls: 'quiz-option-green', icon: '■' },
             ].map((opt) => {
               const isSelected = selectedAnswer === opt.key
-              const isCorrect = currentQuestion.correctAnswer === opt.key
-              const isWrongSelection = answerSubmitted && isSelected && !isCorrect
-              const isCorrectHighlight = answerSubmitted && isCorrect
               return (
                 <button key={opt.key} onClick={() => handleSubmitAnswer(opt.key)} disabled={answerSubmitted}
                   className={`relative p-4 md:p-6 rounded-xl text-white font-bold text-left transition-all
-                    ${isCorrectHighlight ? 'bg-green-600/80 ring-4 ring-green-400 scale-[0.98]' : ''}
-                    ${isWrongSelection ? 'bg-red-600/80 ring-4 ring-red-400 scale-[0.98]' : ''}
-                    ${answerSubmitted && !isSelected && !isCorrect ? 'opacity-30' : ''}
-                    ${!answerSubmitted && !isCorrectHighlight ? `${opt.cls} hover:scale-[1.02] active:scale-[0.98] cursor-pointer` : ''}
+                    ${answerSubmitted && isSelected ? 'ring-4 ring-white/60 scale-[0.98] opacity-80' : ''}
+                    ${answerSubmitted && !isSelected ? 'opacity-30' : ''}
+                    ${!answerSubmitted ? `${opt.cls} hover:scale-[1.02] active:scale-[0.98] cursor-pointer` : ''}
                     ${!answerSubmitted ? 'cursor-pointer' : 'cursor-default'}`}>
                   <div className="flex items-center gap-3">
                     <span className="text-2xl font-black opacity-80">{opt.icon}</span>
                     <span className="text-base md:text-lg">{opt.value}</span>
                   </div>
-                  {isCorrectHighlight && <div className="absolute top-2 right-2"><CheckCircle2 className="w-6 h-6 text-green-200" /></div>}
-                  {isWrongSelection && <div className="absolute top-2 right-2"><XCircle className="w-6 h-6 text-red-200" /></div>}
+                  {answerSubmitted && isSelected && <div className="absolute top-2 right-2"><CheckCircle2 className="w-6 h-6 text-white/60" /></div>}
                 </button>
               )
             })}
           </div>
 
-          {/* Learn Mode Feedback Banner — shown after answering */}
-          {answerSubmitted && currentQuestion.correctAnswer && (
-            <div className={`mt-3 p-4 rounded-xl text-center ${selectedAnswer === currentQuestion.correctAnswer ? 'bg-green-500/20 border border-green-500/30' : 'bg-red-500/20 border border-red-500/30'}`}>
-              {selectedAnswer === currentQuestion.correctAnswer ? (
-                <div className="flex items-center justify-center gap-2 text-green-400">
-                  <CheckCircle2 className="w-5 h-5" />
-                  <span className="font-bold">{t('game.youAnsweredCorrect')}</span>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-1">
-                  <div className="flex items-center gap-2 text-red-400">
-                    <XCircle className="w-5 h-5" />
-                    <span className="font-bold">{t('game.youAnsweredWrong')}</span>
-                  </div>
-                  <span className="text-gray-300 text-sm">
-                    {t('game.theCorrectAnswerWas')}: {currentQuestion[currentQuestion.correctAnswer]}
-                  </span>
-                </div>
-              )}
+          {/* Waiting for answer reveal — shown after answering, NO correct answer shown yet */}
+          {answerSubmitted && (
+            <div className="mt-3 p-4 rounded-xl text-center bg-purple-500/15 border border-purple-500/25">
+              <div className="flex items-center justify-center gap-2 text-purple-300">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="font-medium">{t('game.waitingForReveal') || 'Waiting for reveal...'}</span>
+              </div>
             </div>
           )}
 
@@ -1902,7 +1885,7 @@ export default function QuizBlitzApp() {
             </div>
           </div>
 
-          {/* Auto-continue countdown — results show for 5 seconds then next question starts automatically */}
+          {/* Auto-continue countdown — results show for 2 seconds then next question starts automatically */}
           <div className="mt-6 text-center">
             <div className="flex items-center justify-center gap-2 text-gray-400">
               <Loader2 className="w-4 h-4 animate-spin" />
