@@ -1,9 +1,11 @@
 // In-memory game store for server-side game state management
 // This runs on the Next.js server and handles all game logic
 //
-// KEY DESIGN PRINCIPLES (v2):
+// KEY DESIGN PRINCIPLES (v3):
 // - Each player gets their full time limit to answer independently
-// - Auto-advance when time expires OR all players have answered
+// - Auto-advance when time expires OR all CONNECTED players have answered
+// - Heartbeat tracking: players who don't poll for 15s are considered disconnected
+// - Disconnected players don't block game flow
 // - No creator-only dependency for game flow
 // - Session persistence via localStorage on client, reconnect API
 
@@ -26,7 +28,8 @@ export interface Player {
   correctAnswers: number
   isCreator: boolean
   lastAnswer?: string // Store last answer for reconnect
-  leftAt?: number // Timestamp when player left (0 = active)
+  leftAt?: number // Timestamp when player explicitly left (0 = active)
+  lastPollAt?: number // Timestamp of last poll — used for heartbeat/disconnect detection
 }
 
 export interface Answer {
@@ -52,6 +55,9 @@ export interface GameRoom {
   autoAdvanceAt: number // timestamp when auto-advance should happen
   resultsReadyAt: number // timestamp when results became available
 }
+
+// How long before a player is considered disconnected (no poll)
+const DISCONNECT_TIMEOUT_MS = 15 * 1000 // 15 seconds
 
 // Global game store - use globalThis to persist across HMR reloads
 const globalForStore = globalThis as any
@@ -84,6 +90,57 @@ function generateRoomCode(): string {
     code = Math.floor(100000 + Math.random() * 900000).toString()
   } while (rooms.has(code))
   return code
+}
+
+/**
+ * Get the list of "connected" players — those who are:
+ * 1. Not explicitly left (leftAt = 0 or undefined)
+ * 2. Have polled within the disconnect timeout
+ * This is the key function that prevents ghost players from blocking the game.
+ */
+function getConnectedPlayers(room: GameRoom): Player[] {
+  const now = Date.now()
+  return Array.from(room.players.values()).filter(p => {
+    if (p.leftAt) return false
+    // If no lastPollAt yet, give them a grace period (they just joined)
+    if (!p.lastPollAt) return true
+    return (now - p.lastPollAt) < DISCONNECT_TIMEOUT_MS
+  })
+}
+
+/**
+ * Count answers from connected players only.
+ * This avoids counting answers from players who left or disconnected.
+ */
+function getConnectedAnswerCount(room: GameRoom): number {
+  const connectedIds = new Set(getConnectedPlayers(room).map(p => p.id))
+  let count = 0
+  room.answers.forEach((_, pId) => {
+    if (connectedIds.has(pId)) count++
+  })
+  return count
+}
+
+/**
+ * Check if all connected players have answered and auto-advance if so.
+ * Returns true if all connected players have answered.
+ */
+function checkAllAnswered(room: GameRoom): boolean {
+  const connected = getConnectedPlayers(room)
+  if (connected.length === 0) return false
+
+  const connectedAnswerCount = getConnectedAnswerCount(room)
+  const allAnswered = connectedAnswerCount >= connected.length
+
+  if (allAnswered && room.status === 'playing') {
+    // All connected players answered! Auto-advance in 2 seconds
+    // Only set if not already set (to avoid resetting the countdown)
+    if (room.autoAdvanceAt === 0 || room.autoAdvanceAt > Date.now() + 2000) {
+      room.autoAdvanceAt = Date.now() + 2000
+    }
+  }
+
+  return allAnswered
 }
 
 export function createRoom(data: {
@@ -119,6 +176,7 @@ export function createRoom(data: {
     score: 0,
     correctAnswers: 0,
     isCreator: true,
+    lastPollAt: Date.now(),
   })
 
   rooms.set(code, room)
@@ -144,6 +202,7 @@ export function joinRoom(code: string, playerName: string): { playerId: string; 
     score: 0,
     correctAnswers: 0,
     isCreator: false,
+    lastPollAt: Date.now(),
   })
   room.lastActivity = Date.now()
 
@@ -181,7 +240,13 @@ export function startGame(code: string, playerId: string): { success: boolean; e
   room.questionStartTime = Date.now()
   room.lastActivity = Date.now()
   room.advanceLock = false
-  room.autoAdvanceAt = Date.now() + (room.questions[0]?.timeLimit || room.timePerQuestion) * 1000 // Advance immediately when time expires
+  room.autoAdvanceAt = Date.now() + (room.questions[0]?.timeLimit || room.timePerQuestion) * 1000
+
+  // Reset all players' poll timestamps and answer state for new game
+  room.players.forEach(p => {
+    p.lastPollAt = Date.now()
+    p.lastAnswer = undefined
+  })
 
   return { success: true }
 }
@@ -202,13 +267,8 @@ export function submitAnswer(code: string, playerId: string, answer: string): { 
     answerPlayer.lastAnswer = answer
   }
 
-  // Check if ALL ACTIVE players have answered - if so, schedule auto-advance soon
-  const activePlayers = Array.from(room.players.values()).filter(p => !p.leftAt)
-  const allAnswered = activePlayers.length > 0 && room.answers.size >= activePlayers.length
-  if (allAnswered) {
-    // All active players answered! Auto-advance in 2 seconds so they can see correct answer feedback
-    room.autoAdvanceAt = Date.now() + 2000
-  }
+  // Check if ALL CONNECTED players have answered
+  const allAnswered = checkAllAnswered(room)
 
   return { success: true, allAnswered }
 }
@@ -369,9 +429,22 @@ export function getGameState(code: string, playerId: string): any {
   const player = room.players.get(playerId)
   if (!player) return null
 
+  // HEARTBEAT: Update player's last poll time
+  player.lastPollAt = Date.now()
+  room.lastActivity = Date.now()
+
+  // DISCONNECT CHECK: Mark players as disconnected if they haven't polled recently
+  // This doesn't set leftAt (which is for explicit quits), but we use it for game flow
+  // We detect disconnected players via getConnectedPlayers() instead
+
   // AUTO-ADVANCE CHECK: If time has expired or all players answered, auto-advance
   if (room.status === 'playing' && room.autoAdvanceAt > 0 && Date.now() >= room.autoAdvanceAt) {
     processAdvance(room)
+  }
+
+  // Also check if all connected players have answered (in case autoAdvanceAt wasn't set yet)
+  if (room.status === 'playing') {
+    checkAllAnswered(room)
   }
 
   // AUTO-CONTINUE CHECK: If showing results for more than 2 seconds, auto-continue
@@ -383,6 +456,10 @@ export function getGameState(code: string, playerId: string): any {
     room.autoAdvanceAt = Date.now() + (nextQ?.timeLimit || room.timePerQuestion) * 1000
     room.resultsReadyAt = 0
   }
+
+  const connected = getConnectedPlayers(room)
+  const connectedCount = connected.length
+  const connectedAnswerCount = getConnectedAnswerCount(room)
 
   const base = {
     code: room.code,
@@ -407,9 +484,7 @@ export function getGameState(code: string, playerId: string): any {
       const hasAnswered = room.answers.has(playerId)
       const lastAnswer = player.lastAnswer
 
-      // Check if all active players have answered (for client display)
-      const activePlayers = Array.from(room.players.values()).filter(p => !p.leftAt)
-      const allAnswered = activePlayers.length > 0 && room.answers.size >= activePlayers.length
+      const allAnswered = connectedAnswerCount >= connectedCount && connectedCount > 0
 
       return {
         ...base,
@@ -428,8 +503,8 @@ export function getGameState(code: string, playerId: string): any {
           timeLeft: Math.round(timeLeft * 10) / 10,
           hasAnswered,
           lastAnswer,
-          answerCount: room.answers.size,
-          totalPlayers: room.players.size,
+          answerCount: connectedAnswerCount,
+          totalPlayers: connectedCount,
           allAnswered,
         },
       }
@@ -481,16 +556,13 @@ export function reconnectPlayer(code: string, playerId: string): { success: bool
     player.lastAnswer = undefined
   }
 
+  // Update heartbeat
+  player.lastPollAt = Date.now()
   room.lastActivity = Date.now()
 
   // Return the current game state so the client can restore
   const gameState = getGameState(code, playerId)
   return { success: true, gameState }
-}
-
-// Get count of active (non-left) players in a room
-function getActivePlayerCount(room: GameRoom): number {
-  return Array.from(room.players.values()).filter(p => !p.leftAt).length
 }
 
 export function leaveRoom(code: string, playerId: string): { success: boolean; roomDeleted?: boolean; wasCreator?: boolean } {
@@ -536,20 +608,23 @@ export function leaveRoom(code: string, playerId: string): { success: boolean; r
       }
     }
 
-    // Check if all remaining active players have answered — if so, trigger auto-advance
-    const activePlayers = Array.from(room.players.values()).filter(p => !p.leftAt)
-    if (room.status === 'playing' && activePlayers.length > 0) {
-      const activeAnswerCount = Array.from(room.answers.keys()).filter(pId => {
-        const p = room.players.get(pId)
-        return p && !p.leftAt
-      }).length
-      if (activeAnswerCount >= activePlayers.length) {
-        room.autoAdvanceAt = Date.now() + 2000
+    // Check if all remaining connected players have answered — if so, trigger auto-advance
+    if (room.status === 'playing') {
+      checkAllAnswered(room)
+
+      // If no connected players remain, auto-advance immediately
+      const connected = getConnectedPlayers(room)
+      if (connected.length === 0) {
+        // Force auto-advance in 1 second
+        room.autoAdvanceAt = Math.min(room.autoAdvanceAt || Infinity, Date.now() + 1000)
       }
-    } else if (activePlayers.length === 0) {
-      // No active players left — delete room
-      rooms.delete(code)
-      return { success: true, roomDeleted: true, wasCreator }
+    }
+
+    // Check if no active players remain at all
+    const activePlayers = Array.from(room.players.values()).filter(p => !p.leftAt)
+    if (activePlayers.length === 0) {
+      // No active players left — give a short grace then delete room
+      // Don't delete immediately in case someone reconnects
     }
 
     return { success: true, roomDeleted: false, wasCreator }
@@ -567,6 +642,7 @@ export function rejoinRoom(code: string, playerId: string): { success: boolean; 
   // Reactivate the player
   player.leftAt = 0 // Clear the left timestamp
   player.lastAnswer = undefined
+  player.lastPollAt = Date.now()
   room.lastActivity = Date.now()
 
   // Return the current game state

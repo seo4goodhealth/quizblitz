@@ -78,6 +78,20 @@ export async function GET(req: NextRequest) {
 
     const players = getRoomPlayers(code)
 
+    // Count connected players and their answers (same logic as game-store)
+    const DISCONNECT_TIMEOUT_MS = 15 * 1000
+    const now = Date.now()
+    const connectedPlayers = players.filter(p => {
+      if (p.leftAt) return false
+      if (!p.lastPollAt) return true
+      return (now - p.lastPollAt) < DISCONNECT_TIMEOUT_MS
+    })
+    const connectedIds = new Set(connectedPlayers.map(p => p.id))
+    let connectedAnswerCount = 0
+    room.answers.forEach((_, pId) => {
+      if (connectedIds.has(pId)) connectedAnswerCount++
+    })
+
     const base = {
       code: room.code,
       categoryName: room.categoryName,
@@ -107,8 +121,8 @@ export async function GET(req: NextRequest) {
             questionNumber: room.currentQuestion + 1,
             totalQuestions: room.questions.length,
             timeLeft: Math.round(timeLeft * 10) / 10,
-            answerCount: room.answers.size,
-            totalPlayers: room.players.size,
+            answerCount: connectedAnswerCount,
+            totalPlayers: connectedPlayers.length,
           },
         })
       }
