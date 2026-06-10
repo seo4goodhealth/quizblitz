@@ -1163,7 +1163,7 @@ export default function QuizBlitzApp() {
                   maxLength={20}
                 />
                 <Button
-                  onClick={() => setPlayerName(generateFunnyName())}
+                  onClick={() => setPlayerName(generateFunnyName(locale))}
                   className="h-14 px-4 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-500 hover:to-yellow-500 text-white font-bold shadow-lg shadow-yellow-500/20 transition-all hover:scale-[1.05] active:scale-[0.95] shrink-0"
                   title={t('home.funnyName')}
                 >
@@ -1171,7 +1171,7 @@ export default function QuizBlitzApp() {
                 </Button>
               </div>
               <button
-                onClick={() => setPlayerName(generateFunnyName())}
+                onClick={() => setPlayerName(generateFunnyName(locale))}
                 className="text-xs text-yellow-400/70 hover:text-yellow-300 transition-colors flex items-center gap-1 mx-auto"
               >
                 <Zap className="w-3 h-3" />
@@ -1601,7 +1601,7 @@ export default function QuizBlitzApp() {
                   <div className="flex gap-2">
                     <Input value={playerName} onChange={(e) => setPlayerName(e.target.value)} placeholder={t('join.namePlaceholder')} className="h-12 text-lg bg-white/5 border-white/10 text-white flex-1" maxLength={20} />
                     <Button
-                      onClick={() => setPlayerName(generateFunnyName())}
+                      onClick={() => setPlayerName(generateFunnyName(locale))}
                       className="h-12 px-3 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-500 hover:to-yellow-500 text-white font-bold shrink-0"
                       title={t('home.funnyName')}
                     >
