@@ -42,30 +42,29 @@ const EN_NOUNS = [
 ]
 
 // Spanglish adjectives - the more ridiculous the better!
-// Mix of Spanish, English, and pure Spanglish nonsense
 const SP_ADJECTIVES = [
-  // Pure Spanish comedy
-  'Chido', 'Loco', 'Fresa', 'Naco', 'Chido',
-  'Baboso', 'Menso', 'Crazy', 'Tonto', 'Chiquito',
-  'Gordito', 'Flaquito', 'Chamaco', 'Pocito', 'Rarito',
-  'Chismoso', 'Travieso', 'Agujetas', 'Miedoso', 'Cansado',
-  // Spanglish hybrids (the best kind!)
+  // Classic Spanglish
   'SuperLoco', 'MuyChido', 'BienFresa', 'ElCrazy', 'SoPill',
   'TooMuch', 'MuyCool', 'ElSavage', 'BienChido', 'FullNaco',
-  'WayLoco', 'PeroLike', 'MuyBaboso', 'ElMero', 'BienMacho',
-  // Funny intensifiers
+  'WayLoco', 'PeroLike', 'MuyBaboso', 'ElMero', 'BienRudo',
+  // Intensifiers puros latinos
   'Requete', 'Súper', 'Híper', 'Biónico', 'Nuclear',
-  'Galáctico', 'Interdimensional', 'Explosivo', 'Volcánico', 'Magnético',
-  // Food-based adjectives
-  'Picantito', 'Dulcecito', 'Saladito', 'Agridulce', 'MuyFresco',
+  'Galáctico', 'Explosivo', 'Volcánico', 'Magnético', 'Brutal',
+  // Comedy Spanish
+  'Chido', 'Loco', 'Fresa', 'Naco', 'Baboso',
+  'Menso', 'Tonto', 'Chiquito', 'Gordito', 'Flaquito',
+  'Chamaco', 'Rarito', 'Chismoso', 'Travieso', 'Miedoso',
+  // Food vibes
+  'Picantito', 'Dulcecito', 'Saladito', 'MuyFresco',
   'BienPicante', 'ExtraQueso', 'ConSalsa', 'AlPastor', 'AlCarbon',
   // More Spanglish gold
-  'ElPro', 'LaMera', 'MuyFuerte', 'BienRudo', 'ElBoss',
-  'SacateEl', 'AyCaramba', 'ÓraPues', 'Ándale', 'Órale',
-  'Chévere', 'Bacán', 'Chilango', 'Regio', 'Guanaco',
-  // Absurd combinations
+  'ElPro', 'LaMera', 'MuyFuerte', 'ElBoss', 'LaJefa',
+  'AyCaramba', 'ÓraPues', 'Ándale', 'Órale', 'Óiga',
+  'Chévere', 'Bacán', 'Chilango', 'Regio', 'Paisa',
+  // Absurd combos
   'ChidoPeroNo', 'AlgoRaro', 'MedioLoco', 'PocoSerio', 'CasiPro',
-  'MedioCrazy', 'UnPoco', 'MuyMucho', 'SúperRaro', 'ChidoSí',
+  'MedioCrazy', 'UnPoco', 'MuyMucho', 'SúperRaro', 'BienFeo',
+  'MuyMacho', 'TanLindo', 'ReCool', 'SoFresh', 'ElÚnico',
 ]
 
 // Spanglish nouns - iconic Latino culture + internet nonsense
@@ -75,43 +74,46 @@ const SP_NOUNS = [
   'Mole', 'Pozole', 'Tostada', 'Gordita', 'Quesadilla',
   'Ceviche', 'Aguachile', 'Churro', 'Paleta', 'Michelada',
   'Horchata', 'Jamaica', 'Tamarindo', 'Mangonada', 'Chamoyada',
-  'Machete', 'Cemita', 'Tlacoyo', 'Huarache', 'Memela',
-  // Animals with Spanish flair
+  'Cemita', 'Tlacoyo', 'Huarache', 'Memela', 'Guacamole',
+  'Tamales', 'Enchilada', 'Flauta', 'Sope', 'Pambazo',
+  // Animals con sazón
   'Gallo', 'Chango', 'Cuy', 'Llama', 'Iguana',
   'Cucaracha', 'Zorrillo', 'Venado', 'Guajolote', 'Ajolote',
   'Teporingo', 'Ocelote', 'Quetzal', 'Puma', 'Jaguar',
+  'Nopal', 'Iguana', 'Tortuga', 'Zorro', 'Puerco',
   // People/Characters
-  'Chaparro', 'Güey', 'Vato', 'Ese', 'Mija',
-  'Jefe', 'Jefa', 'Primo', 'Compa', 'Amiguito',
-  'Abuelita', 'TíoLoco', 'Madrina', 'Padrino', 'Comadre',
-  // Objects & Culture
+  'Chaparro', 'Güey', 'Vato', 'Primo', 'Mija',
+  'Jefe', 'Jefa', 'Compa', 'Amiguito', 'Comadre',
+  'Abuelita', 'TíoLoco', 'Madrina', 'Padrino', 'Compa',
+  // Objects & Cultura
   'Piñata', 'Fútbol', 'Sombrero', 'Sarape', 'Maracas',
   'Lowrider', 'Banda', 'Corrido', 'Trompeta', 'Acordeón',
   'Cumbia', 'Salsa', 'Bachata', 'Reggaetón', 'Dembow',
-  // Pure Spanglish noun hybrids
-  'ElNinja', 'LaNinja', 'ElProfe', 'LaProfe', 'ElBoss',
+  // Spanglish noun hybrids
+  'ElNinja', 'ElProfe', 'LaProfe', 'ElBoss',
   'LaJefa', 'ElChido', 'LaFresa', 'ElNaco', 'LaMera',
   'ElTaco', 'LaPapa', 'ElChile', 'LaSalsa', 'ElMaíz',
-  // More ridiculous combos
-  'Chorizo', 'Papaya', 'MaricónDe', 'Malacopa', 'Alma',
+  // Marcas icónicas
   'Caguama', 'BoingMango', 'Ricolino', 'Bimbo', 'Marinela',
   'PelonPe', 'Jarritos', 'TopoChico', 'Valentina', 'Chamoy',
-  // Epic nouns
+  // Leyendas
   'Chupacabras', 'Llorona', 'Alebrije', 'Nahual', 'Quetzalcoatl',
+  'Cadejo', 'Cihuateteo', 'Alux', 'Camazotz', 'Tepoztecatl',
 ]
 
 // Cache of recently generated names to avoid repeats
 const recentNames: string[] = []
 
 export function generateFunnyName(locale?: string): string {
+  // Spanish and Catalan get Spanglish names, all others get English
   const isSpanishLocale = locale === 'es' || locale === 'ca'
 
-  // Pick the right word pools
+  // Pick the right word pools - Spanglish mixes both for maximum comedy
   const adjectives = isSpanishLocale
-    ? [...SP_ADJECTIVES, ...EN_ADJECTIVES.slice(0, 30)] // Mix Spanglish + some English
+    ? [...SP_ADJECTIVES, ...EN_ADJECTIVES.slice(0, 30)]
     : EN_ADJECTIVES
   const nouns = isSpanishLocale
-    ? [...SP_NOUNS, ...EN_NOUNS.slice(0, 30)] // Mix Spanglish + some English
+    ? [...SP_NOUNS, ...EN_NOUNS.slice(0, 30)]
     : EN_NOUNS
 
   // Generate several candidates and pick one not recently used
@@ -122,7 +124,6 @@ export function generateFunnyName(locale?: string): string {
 
     if (!recentNames.includes(name)) {
       recentNames.push(name)
-      // Keep only last 20 names in cache
       if (recentNames.length > 20) recentNames.shift()
       return name
     }
