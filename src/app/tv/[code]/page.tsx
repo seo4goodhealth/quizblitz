@@ -246,13 +246,25 @@ function TVPageContent() {
   if (status === 'showing-results' && questionResults) {
     const correctOption = questionResults.correctAnswer
     const correctLabel = correctOption?.replace('option', '').toUpperCase() || ''
+    const correctText = correctOption ? (questionResults as any)[correctOption] : ''
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-950 flex flex-col items-center justify-center p-8">
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h2 className="text-3xl font-bold text-white mb-3">{t('results.title')}</h2>
           <div className="flex items-center justify-center gap-6 text-lg">
             <span className="text-gray-400">{questionResults.correctCount}/{questionResults.totalAnswers} {t('results.correct')}</span>
-            <span className="text-yellow-400 font-bold">{t('results.correctAnswer')}: {correctLabel}</span>
+          </div>
+        </div>
+
+        {/* Correct answer — prominent banner */}
+        <div className="w-full max-w-2xl p-5 rounded-2xl mb-6 text-center bg-yellow-500/15 border-2 border-yellow-500/40">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <CheckCircle2 className="w-7 h-7 text-yellow-400" />
+            <span className="text-yellow-400 font-bold text-xl">{t('results.correctAnswer')}</span>
+          </div>
+          <div className="flex items-center justify-center gap-4">
+            <span className="bg-yellow-500/30 text-yellow-300 font-black text-3xl w-14 h-14 rounded-xl flex items-center justify-center">{correctLabel}</span>
+            <span className="text-white font-bold text-2xl text-left flex-1">{correctText}</span>
           </div>
         </div>
 

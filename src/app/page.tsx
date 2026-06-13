@@ -514,7 +514,8 @@ export default function QuizBlitzApp() {
   // ==================== CAST TO TV ====================
   const openTVMode = () => {
     const url = `/tv/${roomCode}`
-    window.open(url, '_blank', 'width=1280,height=720')
+    // No window features — avoids popup blockers; opens as a normal new tab
+    window.open(url, '_blank')
   }
 
   // ==================== POLLING ====================
@@ -1933,24 +1934,37 @@ export default function QuizBlitzApp() {
       {/* ====== QUESTION RESULTS VIEW ====== */}
       {view === 'results' && questionResults && (
         <div className="flex-1 flex flex-col items-center p-4 max-w-lg mx-auto w-full">
-          <div className="text-center mb-6 animate-slide-up">
-            <h2 className="text-2xl font-bold text-white mb-2">{t('results.title')}</h2>
-            <div className="flex items-center justify-center gap-4 text-sm">
-              <span className="text-gray-400">{questionResults.correctCount}/{questionResults.totalAnswers} {t('results.correct')}</span>
-              <span className="text-gray-500">|</span>
-              <span className="text-yellow-400">{t('results.correctAnswer')}: {questionResults.correctAnswer.replace('option', '').toUpperCase()}</span>
-            </div>
-          </div>
-
-          {/* My result */}
+          {/* My result — correct/wrong banner */}
           {(() => {
             const myResult = questionResults.results?.find((r: any) => r.playerId === playerId)
             if (!myResult) return null
             return (
-              <div className={`w-full p-6 rounded-xl mb-6 text-center animate-slide-up ${myResult.correct ? 'bg-green-500/20 border-2 border-green-500/30' : 'bg-red-500/20 border-2 border-red-500/30'}`}>
-                {myResult.correct ? <CheckCircle2 className="w-16 h-16 text-green-400 mx-auto mb-2" /> : <XCircle className="w-16 h-16 text-red-400 mx-auto mb-2" />}
+              <div className={`w-full p-5 rounded-xl mb-4 text-center animate-slide-up ${myResult.correct ? 'bg-green-500/20 border-2 border-green-500/30' : 'bg-red-500/20 border-2 border-red-500/30'}`}>
+                {myResult.correct ? <CheckCircle2 className="w-14 h-14 text-green-400 mx-auto mb-2" /> : <XCircle className="w-14 h-14 text-red-400 mx-auto mb-2" />}
                 <p className={`text-2xl font-bold ${myResult.correct ? 'text-green-400' : 'text-red-400'}`}>{myResult.correct ? t('results.correctExclaim') : t('results.wrong')}</p>
                 {myResult.correct && myResult.points > 0 && <p className="text-yellow-400 text-lg font-bold mt-1">+{myResult.points} {t('results.points')}</p>}
+              </div>
+            )
+          })()}
+
+          {/* Correct answer — prominent card */}
+          {(() => {
+            const correctKey = questionResults.correctAnswer // e.g. "optionA"
+            const correctLabel = correctKey?.replace('option', '').toUpperCase() || ''
+            const correctText = correctKey ? (questionResults as any)[correctKey] : ''
+            return (
+              <div className="w-full p-5 rounded-xl mb-4 text-center bg-yellow-500/15 border-2 border-yellow-500/40 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <CheckCircle2 className="w-6 h-6 text-yellow-400" />
+                  <span className="text-yellow-400 font-bold text-lg">{t('results.correctAnswer')}</span>
+                </div>
+                <div className="flex items-center justify-center gap-3">
+                  <span className="bg-yellow-500/30 text-yellow-300 font-black text-2xl w-10 h-10 rounded-lg flex items-center justify-center">{correctLabel}</span>
+                  <span className="text-white font-bold text-lg text-left flex-1">{correctText}</span>
+                </div>
+                <div className="mt-2 text-gray-400 text-sm">
+                  {questionResults.correctCount}/{questionResults.totalAnswers} {t('results.correct')}
+                </div>
               </div>
             )
           })()}

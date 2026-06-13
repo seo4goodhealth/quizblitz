@@ -428,6 +428,11 @@ function processAdvanceOnRoom(room: GameRoomData): { questionResults: any; isFin
 
     const questionResults = {
       correctAnswer: question.correctAnswer,
+      questionText: question.text,
+      optionA: question.optionA,
+      optionB: question.optionB,
+      optionC: question.optionC,
+      optionD: question.optionD,
       results,
       leaderboard,
       totalAnswers: Object.keys(room.answers).length,
