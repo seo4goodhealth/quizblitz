@@ -67,13 +67,28 @@ const RESULTS_DISPLAY_MS = 4000 // 4 seconds
 const ADVANCE_LOCK_MS = 2000 // 2 seconds
 const ROOM_TTL_MS = 2 * 60 * 60 * 1000 // 2 hours
 
+// ===== KV AVAILABILITY CHECK =====
+// Check once whether KV is configured (has required env vars)
+let kvAvailable: boolean | null = null
+async function isKvAvailable(): Promise<boolean> {
+  if (kvAvailable !== null) return kvAvailable
+  try {
+    // Try a simple KV operation to check if it's configured
+    await kv.get('__kv_check__')
+    kvAvailable = true
+    return true
+  } catch {
+    kvAvailable = false
+    return false
+  }
+}
+
 // ===== KV KEY HELPERS =====
 function roomKey(code: string): string {
   return `room:${code}`
 }
 
 // ===== SERIALIZATION HELPERS =====
-// Convert GameRoom with Maps to GameRoomData with plain objects for Redis
 function serializeRoom(room: GameRoomData): string {
   return JSON.stringify(room)
 }
@@ -89,30 +104,38 @@ function deserializeRoom(data: string): GameRoomData | null {
 
 // ===== ROOM OPERATIONS =====
 async function getRoomData(code: string): Promise<GameRoomData | null> {
+  if (!(await isKvAvailable())) {
+    return getRoomDataLocal(code)
+  }
   try {
     const data = await kv.get<string>(roomKey(code))
     if (!data) return null
     return deserializeRoom(data)
   } catch {
-    // KV not available — fall back to in-memory
     return getRoomDataLocal(code)
   }
 }
 
 async function setRoomData(room: GameRoomData): Promise<void> {
+  if (!(await isKvAvailable())) {
+    setRoomDataLocal(room)
+    return
+  }
   try {
     await kv.set(roomKey(room.code), serializeRoom(room), { px: ROOM_TTL_MS })
   } catch {
-    // KV not available — fall back to in-memory
     setRoomDataLocal(room)
   }
 }
 
 async function deleteRoomData(code: string): Promise<void> {
+  if (!(await isKvAvailable())) {
+    deleteRoomDataLocal(code)
+    return
+  }
   try {
     await kv.del(roomKey(code))
   } catch {
-    // KV not available
     deleteRoomDataLocal(code)
   }
 }
