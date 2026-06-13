@@ -159,3 +159,32 @@ Stage Summary:
 - PDF guide saved to /home/z/my-project/download/QuizBlitz_App_Store_Submission_Guide.pdf
 - Key scripts: npm run build:cap, npm run cap:open:android, npm run cap:open:ios
 - Total cost for both stores: $124 ($99 Apple/year + $25 Google one-time)
+---
+Task ID: 1
+Agent: main
+Task: Fix game stability - game bugs out frequently, can't start after sending to TV
+
+Work Log:
+- Investigated the full game flow: create room → lobby → start game → TV display
+- Identified ROOT CAUSE: Game state stored in-memory (globalThis.__gameRooms) doesn't persist across Vercel serverless instances
+- On Vercel, each API call may hit a different serverless function instance
+- Room created on Instance A → start game hits Instance B → room not found → game breaks
+- This explains ALL the frequent bugs: "cada dos por tres", can't start after TV, player count issues
+- Installed @vercel/kv package for Redis-backed persistent state
+- Completely rewrote game-store.ts to use Vercel KV (Redis) with in-memory fallback
+- Changed Maps to plain Record<string, T> objects for JSON serialization
+- Made all game-store functions async (createRoom, joinRoom, startGame, etc.)
+- Added KV availability check to avoid unnecessary retries when KV is not configured
+- Added TTL (2 hours) for automatic room cleanup in Redis
+- Updated all 13 API routes to use async game-store functions with await
+- Fixed polling stale closure bug: removed `view` from startPolling dependencies, added viewRef
+- Added isCreator sync from server during polling (was missing before!)
+- Fixed handleStartGame to check response and handle "Room not found" error
+- Build succeeded, pushed to GitHub for auto-deploy
+
+Stage Summary:
+- ROOT CAUSE: In-memory game state doesn't work on Vercel serverless
+- FIX: Migrated to Vercel KV (Redis) for persistent state with in-memory fallback
+- Also fixed: polling stale closure, isCreator not syncing, handleStartGame error handling
+- PENDING: User needs to set up Vercel KV integration (add KV store on Vercel dashboard)
+- Without KV integration, falls back to in-memory (works for local dev only)
