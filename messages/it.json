@@ -116,6 +116,7 @@
     "playersAnswered": "giocatori hanno risposto",
     "waitingForOthers": "In attesa degli altri...",
     "waitingForReveal": "Risposta bloccata! In attesa di rivelazione...",
+    "correctAnswerRevealed": "La risposta corretta è stata rivelata!",
     "nextQuestionAuto": "Prossima domanda a breve...",
     "correctAnswer": "Risposta corretta",
     "youAnsweredCorrect": "Corretta! Ben fatto!",

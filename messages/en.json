@@ -116,6 +116,7 @@
     "playersAnswered": "players answered",
     "waitingForOthers": "Waiting for others...",
     "waitingForReveal": "Answer locked in! Waiting for reveal...",
+    "correctAnswerRevealed": "The correct answer has been revealed!",
     "nextQuestionAuto": "Next question starting soon...",
     "correctAnswer": "Correct answer",
     "youAnsweredCorrect": "Correct! Well done!",

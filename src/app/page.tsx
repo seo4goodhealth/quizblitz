@@ -173,6 +173,7 @@ export default function QuizBlitzApp() {
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
   const [answerSubmitted, setAnswerSubmitted] = useState(false)
   const [questionResults, setQuestionResults] = useState<any>(null)
+  const [revealedAnswer, setRevealedAnswer] = useState<string | null>(null) // correct answer shown on buttons
   const [gameStatus, setGameStatus] = useState<string>('lobby')
   const [totalQuestions, setTotalQuestions] = useState(0)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
@@ -545,6 +546,7 @@ export default function QuizBlitzApp() {
               setSelectedAnswer(null)
               setAnswerSubmitted(false)
               setQuestionResults(null)
+              setRevealedAnswer(null)
             }
             return data.currentQuestion
           })
@@ -558,8 +560,18 @@ export default function QuizBlitzApp() {
         } else if (data.status === 'showing-results') {
           if (data.questionResults) {
             setQuestionResults(data.questionResults)
+            // Show the correct answer on the game buttons BEFORE switching to results view
+            if (data.questionResults.correctAnswer && !revealedAnswer) {
+              setRevealedAnswer(data.questionResults.correctAnswer)
+              // Wait 2 seconds so the player can see which answer was correct
+              setTimeout(() => {
+                if (viewRef.current !== 'results') setView('results')
+              }, 2000)
+            } else if (!data.questionResults.correctAnswer) {
+              // No correct answer in results (shouldn't happen, but fallback)
+              if (viewRef.current !== 'results') setView('results')
+            }
           }
-          if (viewRef.current !== 'results') setView('results')
         } else if (data.status === 'finished') {
           setFinalLeaderboard(data.leaderboard || [])
           // Store questions from the finished game for save feature
@@ -657,6 +669,7 @@ export default function QuizBlitzApp() {
     setSelectedAnswer(null)
     setAnswerSubmitted(false)
     setQuestionResults(null)
+    setRevealedAnswer(null)
     setGameStatus('lobby')
     setFinalLeaderboard([])
     setJoinError('')
@@ -946,6 +959,7 @@ export default function QuizBlitzApp() {
     setSelectedAnswer(null)
     setAnswerSubmitted(false)
     setQuestionResults(null)
+    setRevealedAnswer(null)
     setGameStatus('lobby')
     setFinalLeaderboard([])
     setShowQuitConfirm(false)
@@ -1841,7 +1855,7 @@ export default function QuizBlitzApp() {
             </CardContent>
           </Card>
 
-          {/* Answer Options — correct answer is NOT revealed until all players answer or time expires */}
+          {/* Answer Options — correct answer revealed when all answer or time expires */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
             {[
               { key: 'optionA', value: currentQuestion.optionA, cls: 'quiz-option-red', icon: '▲' },
@@ -1850,25 +1864,40 @@ export default function QuizBlitzApp() {
               { key: 'optionD', value: currentQuestion.optionD, cls: 'quiz-option-green', icon: '■' },
             ].map((opt) => {
               const isSelected = selectedAnswer === opt.key
+              const isCorrect = revealedAnswer === opt.key
+              const isRevealing = !!revealedAnswer
               return (
                 <button key={opt.key} onClick={() => handleSubmitAnswer(opt.key)} disabled={answerSubmitted}
                   className={`relative p-4 md:p-6 rounded-xl text-white font-bold text-left transition-all
-                    ${answerSubmitted && isSelected ? 'ring-4 ring-white/60 scale-[0.98] opacity-80' : ''}
-                    ${answerSubmitted && !isSelected ? 'opacity-30' : ''}
+                    ${isRevealing && isCorrect ? 'ring-4 ring-green-400 scale-[1.02] bg-green-500/80 shadow-lg shadow-green-500/30' : ''}
+                    ${isRevealing && !isCorrect ? 'opacity-30 grayscale' : ''}
+                    ${!isRevealing && answerSubmitted && isSelected ? 'ring-4 ring-white/60 scale-[0.98] opacity-80' : ''}
+                    ${!isRevealing && answerSubmitted && !isSelected ? 'opacity-30' : ''}
                     ${!answerSubmitted ? `${opt.cls} hover:scale-[1.02] active:scale-[0.98] cursor-pointer` : ''}
                     ${!answerSubmitted ? 'cursor-pointer' : 'cursor-default'}`}>
                   <div className="flex items-center gap-3">
                     <span className="text-2xl font-black opacity-80">{opt.icon}</span>
                     <span className="text-base md:text-lg">{opt.value}</span>
                   </div>
-                  {answerSubmitted && isSelected && <div className="absolute top-2 right-2"><CheckCircle2 className="w-6 h-6 text-white/60" /></div>}
+                  {isRevealing && isCorrect && <div className="absolute top-2 right-2"><CheckCircle2 className="w-6 h-6 text-white" /></div>}
+                  {!isRevealing && answerSubmitted && isSelected && <div className="absolute top-2 right-2"><CheckCircle2 className="w-6 h-6 text-white/60" /></div>}
                 </button>
               )
             })}
           </div>
 
-          {/* Waiting for answer reveal — shown after answering, NO correct answer shown yet */}
-          {answerSubmitted && (
+          {/* Show message when correct answer is revealed */}
+          {revealedAnswer && (
+            <div className="mt-3 p-4 rounded-xl text-center bg-green-500/15 border border-green-500/25">
+              <div className="flex items-center justify-center gap-2 text-green-300">
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="font-medium">{t('game.correctAnswerRevealed') || `Correct answer: ${revealedAnswer.replace('option', '').toUpperCase()}`}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Waiting for answer reveal — shown after answering, before reveal */}
+          {answerSubmitted && !revealedAnswer && (
             <div className="mt-3 p-4 rounded-xl text-center bg-purple-500/15 border border-purple-500/25">
               <div className="flex items-center justify-center gap-2 text-purple-300">
                 <Loader2 className="w-5 h-5 animate-spin" />

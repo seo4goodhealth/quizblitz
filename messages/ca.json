@@ -116,6 +116,7 @@
     "playersAnswered": "jugadors han respost",
     "waitingForOthers": "S'està esperant els altres...",
     "waitingForReveal": "Resposta bloquejada! S'està esperant la revelació...",
+    "correctAnswerRevealed": "S'ha revelat la resposta correcta!",
     "nextQuestionAuto": "La pròxima pregunta començarà aviat...",
     "correctAnswer": "Resposta correcta",
     "youAnsweredCorrect": "Correcta! Ben fet!",
