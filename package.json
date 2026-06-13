@@ -67,6 +67,7 @@
     "@serwist/next": "^9.5.11",
     "@tanstack/react-query": "^5.82.0",
     "@tanstack/react-table": "^8.21.3",
+    "@vercel/kv": "^3.0.0",
     "@vitalets/google-translate-api": "^9.2.1",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",

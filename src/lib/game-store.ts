@@ -1,14 +1,16 @@
-// In-memory game store for server-side game state management
-// This runs on the Next.js server and handles all game logic
+// Redis-backed game store for server-side game state management
+// Uses Vercel KV (Upstash Redis) for persistence across serverless instances
 //
-// KEY DESIGN PRINCIPLES (v4 — stable):
+// KEY DESIGN PRINCIPLES (v5 — Redis-backed, stable):
 // - Each player gets their full time limit to answer independently
 // - Auto-advance when time expires OR all CONNECTED players have answered
 // - Heartbeat tracking: players who don't poll for 8s are considered disconnected
 // - Disconnected players don't block game flow
 // - No creator-only dependency for game flow
 // - Single source of truth: processAdvance is the ONLY function that advances state
-// - TV state route must NOT duplicate advance logic
+// - All state persisted in Redis so it works across Vercel serverless instances
+
+import { kv } from '@vercel/kv'
 
 export interface Question {
   id: string
@@ -39,78 +41,135 @@ export interface Answer {
   time: number // ms since question start
 }
 
-export interface GameRoom {
+// Serializable version of GameRoom (no Maps — uses plain objects for Redis storage)
+export interface GameRoomData {
   code: string
   categoryName: string
   status: 'lobby' | 'playing' | 'showing-results' | 'finished'
-  players: Map<string, Player>
+  players: Record<string, Player>
   questions: Question[]
   currentQuestion: number
   timePerQuestion: number
-  answers: Map<string, Answer>
+  answers: Record<string, Answer>
   questionStartTime: number
   createdAt: number
   lastActivity: number
   lastQuestionResults: any | null
-  advanceLock: boolean // prevent double-advance from concurrent polls
-  autoAdvanceAt: number // timestamp when auto-advance should happen
-  resultsReadyAt: number // timestamp when results became available
+  advanceLock: boolean
+  autoAdvanceAt: number
+  resultsReadyAt: number
 }
 
 // ===== TIMING CONSTANTS =====
-// How long before a player is considered disconnected (no poll)
-const DISCONNECT_TIMEOUT_MS = 8 * 1000 // 8 seconds — fast enough for quiz pacing
-// How long to wait after all players answer before revealing the answer
-const REVEAL_DELAY_MS = 2000 // 2 seconds — brief suspense
-// How long to show results before auto-continuing to next question
-const RESULTS_DISPLAY_MS = 4000 // 4 seconds — enough time to read with 1.5s polling
-// How long the advanceLock stays active to prevent double-advance
-const ADVANCE_LOCK_MS = 2000 // 2 seconds — generous safety margin
+const DISCONNECT_TIMEOUT_MS = 8 * 1000 // 8 seconds
+const REVEAL_DELAY_MS = 2000 // 2 seconds
+const RESULTS_DISPLAY_MS = 4000 // 4 seconds
+const ADVANCE_LOCK_MS = 2000 // 2 seconds
+const ROOM_TTL_MS = 2 * 60 * 60 * 1000 // 2 hours
 
-// Global game store - use globalThis to persist across HMR reloads
-const globalForStore = globalThis as any
-if (!globalForStore.__gameRooms) {
-  globalForStore.__gameRooms = new Map<string, GameRoom>()
+// ===== KV KEY HELPERS =====
+function roomKey(code: string): string {
+  return `room:${code}`
 }
-const rooms: Map<string, GameRoom> = globalForStore.__gameRooms
 
-// Cleanup old rooms (older than 2 hours)
-function cleanupOldRooms() {
-  const now = Date.now()
-  for (const [code, room] of rooms.entries()) {
-    if (now - room.lastActivity > 2 * 60 * 60 * 1000) {
-      rooms.delete(code)
-    }
+// ===== SERIALIZATION HELPERS =====
+// Convert GameRoom with Maps to GameRoomData with plain objects for Redis
+function serializeRoom(room: GameRoomData): string {
+  return JSON.stringify(room)
+}
+
+// Parse GameRoomData from Redis
+function deserializeRoom(data: string): GameRoomData | null {
+  try {
+    return JSON.parse(data)
+  } catch {
+    return null
   }
 }
 
-// Run cleanup every 10 minutes
+// ===== ROOM OPERATIONS =====
+async function getRoomData(code: string): Promise<GameRoomData | null> {
+  try {
+    const data = await kv.get<string>(roomKey(code))
+    if (!data) return null
+    return deserializeRoom(data)
+  } catch {
+    // KV not available — fall back to in-memory
+    return getRoomDataLocal(code)
+  }
+}
+
+async function setRoomData(room: GameRoomData): Promise<void> {
+  try {
+    await kv.set(roomKey(room.code), serializeRoom(room), { px: ROOM_TTL_MS })
+  } catch {
+    // KV not available — fall back to in-memory
+    setRoomDataLocal(room)
+  }
+}
+
+async function deleteRoomData(code: string): Promise<void> {
+  try {
+    await kv.del(roomKey(code))
+  } catch {
+    // KV not available
+    deleteRoomDataLocal(code)
+  }
+}
+
+// ===== IN-MEMORY FALLBACK (for local dev without KV) =====
+const localRooms: Map<string, GameRoomData> = new Map()
+
+function getRoomDataLocal(code: string): GameRoomData | null {
+  return localRooms.get(code) || null
+}
+
+function setRoomDataLocal(room: GameRoomData): void {
+  localRooms.set(room.code, room)
+}
+
+function deleteRoomDataLocal(code: string): void {
+  localRooms.delete(code)
+}
+
+// Cleanup old rooms periodically (in-memory fallback only)
 if (typeof globalThis !== 'undefined') {
   const g = globalThis as any
   if (!g.__gameCleanupInterval) {
-    g.__gameCleanupInterval = setInterval(cleanupOldRooms, 10 * 60 * 1000)
+    g.__gameCleanupInterval = setInterval(() => {
+      const now = Date.now()
+      for (const [code, room] of localRooms.entries()) {
+        if (now - room.lastActivity > ROOM_TTL_MS) {
+          localRooms.delete(code)
+        }
+      }
+    }, 10 * 60 * 1000)
   }
 }
 
-function generateRoomCode(): string {
+// ===== CODE GENERATION =====
+async function generateRoomCode(): Promise<string> {
   let code: string
+  let attempts = 0
   do {
     code = Math.floor(100000 + Math.random() * 900000).toString()
-  } while (rooms.has(code))
+    attempts++
+    if (attempts > 100) break // safety valve
+  } while (await getRoomData(code) !== null)
   return code
 }
+
+// ===== HELPER FUNCTIONS =====
 
 /**
  * Get the list of "connected" players — those who are:
  * 1. Not explicitly left (leftAt = 0 or undefined)
  * 2. Have polled within the disconnect timeout
- * This is the key function that prevents ghost players from blocking the game.
  */
-export function getConnectedPlayers(room: GameRoom): Player[] {
+export function getConnectedPlayers(room: GameRoomData): Player[] {
   const now = Date.now()
-  return Array.from(room.players.values()).filter(p => {
+  return Object.values(room.players).filter(p => {
     if (p.leftAt) return false
-    // If no lastPollAt yet, give them a grace period (they just joined)
     if (!p.lastPollAt) return true
     return (now - p.lastPollAt) < DISCONNECT_TIMEOUT_MS
   })
@@ -118,22 +177,20 @@ export function getConnectedPlayers(room: GameRoom): Player[] {
 
 /**
  * Count answers from connected players only.
- * This avoids counting answers from players who left or disconnected.
  */
-export function getConnectedAnswerCount(room: GameRoom): number {
+export function getConnectedAnswerCount(room: GameRoomData): number {
   const connectedIds = new Set(getConnectedPlayers(room).map(p => p.id))
   let count = 0
-  room.answers.forEach((_, pId) => {
+  for (const pId of Object.keys(room.answers)) {
     if (connectedIds.has(pId)) count++
-  })
+  }
   return count
 }
 
 /**
  * Check if all connected players have answered and schedule auto-advance if so.
- * Returns true if all connected players have answered.
  */
-function checkAllAnswered(room: GameRoom): boolean {
+function checkAllAnswered(room: GameRoomData): boolean {
   if (room.status !== 'playing') return false
 
   const connected = getConnectedPlayers(room)
@@ -143,8 +200,6 @@ function checkAllAnswered(room: GameRoom): boolean {
   const allAnswered = connectedAnswerCount >= connected.length
 
   if (allAnswered) {
-    // All connected players answered! Auto-advance after a brief suspense delay
-    // Only set if not already set or if the existing one is further in the future
     const proposedTime = Date.now() + REVEAL_DELAY_MS
     if (room.autoAdvanceAt === 0 || room.autoAdvanceAt > proposedTime) {
       room.autoAdvanceAt = proposedTime
@@ -154,24 +209,26 @@ function checkAllAnswered(room: GameRoom): boolean {
   return allAnswered
 }
 
-export function createRoom(data: {
+// ===== EXPORTED API FUNCTIONS (all async) =====
+
+export async function createRoom(data: {
   playerName: string
   categoryName: string
   questions: Question[]
   timePerQuestion: number
-}): { code: string; playerId: string } {
-  const code = generateRoomCode()
+}): Promise<{ code: string; playerId: string }> {
+  const code = await generateRoomCode()
   const playerId = `p_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`
 
-  const room: GameRoom = {
+  const room: GameRoomData = {
     code,
     categoryName: data.categoryName,
     status: 'lobby',
-    players: new Map(),
+    players: {},
     questions: data.questions.map((q, i) => ({ ...q, order: i })),
     currentQuestion: 0,
     timePerQuestion: data.timePerQuestion || 15,
-    answers: new Map(),
+    answers: {},
     questionStartTime: 0,
     createdAt: Date.now(),
     lastActivity: Date.now(),
@@ -181,115 +238,113 @@ export function createRoom(data: {
     resultsReadyAt: 0,
   }
 
-  room.players.set(playerId, {
+  room.players[playerId] = {
     id: playerId,
     name: data.playerName,
     score: 0,
     correctAnswers: 0,
     isCreator: true,
     lastPollAt: Date.now(),
-  })
+  }
 
-  rooms.set(code, room)
+  await setRoomData(room)
   return { code, playerId }
 }
 
-export function joinRoom(code: string, playerName: string): { playerId: string; room: GameRoom } | { error: string } {
-  const room = rooms.get(code)
+export async function joinRoom(code: string, playerName: string): Promise<{ playerId: string; room: GameRoomData } | { error: string }> {
+  const room = await getRoomData(code)
   if (!room) return { error: 'Room not found. Check the code and try again.' }
   if (room.status !== 'lobby') return { error: 'Game already in progress.' }
-  if (room.players.size >= 50) return { error: 'Room is full (max 50 players).' }
+  if (Object.keys(room.players).length >= 50) return { error: 'Room is full (max 50 players).' }
 
-  // Check for duplicate names
-  const existingNames = Array.from(room.players.values()).map(p => p.name.toLowerCase())
+  const existingNames = Object.values(room.players).map(p => p.name.toLowerCase())
   if (existingNames.includes(playerName.toLowerCase())) {
     return { error: 'A player with that name already exists.' }
   }
 
   const playerId = `p_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`
-  room.players.set(playerId, {
+  room.players[playerId] = {
     id: playerId,
     name: playerName,
     score: 0,
     correctAnswers: 0,
     isCreator: false,
     lastPollAt: Date.now(),
-  })
+  }
   room.lastActivity = Date.now()
 
+  await setRoomData(room)
   return { playerId, room }
 }
 
-export function getRoom(code: string): GameRoom | null {
-  return rooms.get(code) || null
+export async function getRoom(code: string): Promise<GameRoomData | null> {
+  return getRoomData(code)
 }
 
-export function getRoomPlayers(code: string): Player[] {
-  const room = rooms.get(code)
+export async function getRoomPlayers(code: string): Promise<Player[]> {
+  const room = await getRoomData(code)
   if (!room) return []
-  return Array.from(room.players.values())
+  return Object.values(room.players)
 }
 
-export function getLeaderboard(code: string): { id: string; name: string; score: number; correctAnswers: number; rank: number }[] {
-  const room = rooms.get(code)
+export async function getLeaderboard(code: string): Promise<{ id: string; name: string; score: number; correctAnswers: number; rank: number }[]> {
+  const room = await getRoomData(code)
   if (!room) return []
-  return Array.from(room.players.values())
+  return Object.values(room.players)
     .sort((a, b) => b.score - a.score)
     .map((p, i) => ({ ...p, rank: i + 1 }))
 }
 
-export function startGame(code: string, playerId: string): { success: boolean; error?: string } {
-  const room = rooms.get(code)
+export async function startGame(code: string, playerId: string): Promise<{ success: boolean; error?: string }> {
+  const room = await getRoomData(code)
   if (!room) return { success: false, error: 'Room not found' }
 
-  const player = room.players.get(playerId)
+  const player = room.players[playerId]
   if (!player || !player.isCreator) return { success: false, error: 'Only the creator can start the game' }
 
   room.status = 'playing'
   room.currentQuestion = 0
-  room.answers.clear()
+  room.answers = {}
   room.questionStartTime = Date.now()
   room.lastActivity = Date.now()
   room.advanceLock = false
   room.autoAdvanceAt = Date.now() + (room.questions[0]?.timeLimit || room.timePerQuestion) * 1000
 
-  // Reset all players' poll timestamps and answer state for new game
-  room.players.forEach(p => {
+  for (const p of Object.values(room.players)) {
     p.lastPollAt = Date.now()
     p.lastAnswer = undefined
-  })
+  }
 
+  await setRoomData(room)
   return { success: true }
 }
 
-export function submitAnswer(code: string, playerId: string, answer: string): { success: boolean; error?: string; allAnswered?: boolean } {
-  const room = rooms.get(code)
+export async function submitAnswer(code: string, playerId: string, answer: string): Promise<{ success: boolean; error?: string; allAnswered?: boolean }> {
+  const room = await getRoomData(code)
   if (!room) return { success: false, error: 'Room not found' }
   if (room.status !== 'playing') return { success: false, error: 'Game is not in progress' }
-  if (room.answers.has(playerId)) return { success: false, error: 'Already answered' }
+  if (room.answers[playerId]) return { success: false, error: 'Already answered' }
 
   const timeElapsed = Date.now() - room.questionStartTime
-  room.answers.set(playerId, { playerId, answer, time: timeElapsed })
+  room.answers[playerId] = { playerId, answer, time: timeElapsed }
   room.lastActivity = Date.now()
 
-  // Save answer on player for reconnect
-  const answerPlayer = room.players.get(playerId)
+  const answerPlayer = room.players[playerId]
   if (answerPlayer) {
     answerPlayer.lastAnswer = answer
   }
 
-  // Check if ALL CONNECTED players have answered
   const allAnswered = checkAllAnswered(room)
 
+  await setRoomData(room)
   return { success: true, allAnswered }
 }
 
 /**
  * THE ONLY function that processes question results and advances the game.
- * This is the single source of truth — no other code should advance the game state.
- * Exported so tv-state route can use it instead of duplicating logic.
+ * Mutates the room object and returns the results.
  */
-export function processAdvance(room: GameRoom): { questionResults: any; isFinished: boolean; leaderboard?: any } | null {
+function processAdvanceOnRoom(room: GameRoomData): { questionResults: any; isFinished: boolean; leaderboard?: any } | null {
   if (room.advanceLock) return null
   room.advanceLock = true
 
@@ -301,15 +356,14 @@ export function processAdvance(room: GameRoom): { questionResults: any; isFinish
     }
 
     const results: any[] = []
-    room.answers.forEach((answerData, pId) => {
-      const p = room.players.get(pId)
-      if (!p) return
+    for (const [pId, answerData] of Object.entries(room.answers)) {
+      const p = room.players[pId]
+      if (!p) continue
 
       const isCorrect = answerData.answer === question.correctAnswer
       let points = 0
 
       if (isCorrect) {
-        // Points decrease with time: max 1000 (instant) down to 500 (50% at time limit)
         const timeRatio = Math.max(0, 1 - (answerData.time / (question.timeLimit * 1000)))
         points = Math.round(500 + timeRatio * 500)
         p.score += points
@@ -323,11 +377,11 @@ export function processAdvance(room: GameRoom): { questionResults: any; isFinish
         correct: isCorrect,
         points,
       })
-    })
+    }
 
     // Add players who didn't answer (timed out) with 0 points
-    room.players.forEach((p, pId) => {
-      if (!room.answers.has(pId)) {
+    for (const [pId, p] of Object.entries(room.players)) {
+      if (!room.answers[pId]) {
         results.push({
           playerId: pId,
           playerName: p.name,
@@ -337,36 +391,39 @@ export function processAdvance(room: GameRoom): { questionResults: any; isFinish
           timedOut: true,
         })
       }
-    })
+    }
+
+    const leaderboard = Object.values(room.players)
+      .sort((a, b) => b.score - a.score)
+      .map((p, i) => ({ ...p, rank: i + 1 }))
 
     const questionResults = {
       correctAnswer: question.correctAnswer,
       results,
-      leaderboard: getLeaderboard(room.code),
-      totalAnswers: room.answers.size,
+      leaderboard,
+      totalAnswers: Object.keys(room.answers).length,
       correctCount: results.filter(r => r.correct).length,
-      totalPlayers: room.players.size,
+      totalPlayers: Object.keys(room.players).length,
     }
 
-    // Store results for players to fetch
     room.lastQuestionResults = questionResults
 
     // Clear per-question state
     room.currentQuestion += 1
-    room.answers.clear()
+    room.answers = {}
     room.autoAdvanceAt = 0
 
     // Clear lastAnswer on all players for the new question
-    room.players.forEach(p => {
+    for (const p of Object.values(room.players)) {
       p.lastAnswer = undefined
-    })
+    }
 
     if (room.currentQuestion >= room.questions.length) {
       room.status = 'finished'
       room.lastActivity = Date.now()
       return {
         questionResults,
-        leaderboard: getLeaderboard(room.code),
+        leaderboard,
         isFinished: true,
       }
     } else {
@@ -379,23 +436,37 @@ export function processAdvance(room: GameRoom): { questionResults: any; isFinish
       }
     }
   } finally {
-    // Release lock after a generous delay to prevent double-advance from concurrent polls
-    setTimeout(() => { room.advanceLock = false }, ADVANCE_LOCK_MS)
+    // Release lock after a generous delay
+    // Since we're in Redis now, we need to persist the lock state
+    // The lock will be released by the next save + the setTimeout
+    const roomCode = room.code
+    setTimeout(async () => {
+      const r = await getRoomData(roomCode)
+      if (r) {
+        r.advanceLock = false
+        await setRoomData(r)
+      }
+    }, ADVANCE_LOCK_MS)
   }
 }
 
-export function advanceToNextQuestion(code: string, playerId: string): { success: boolean; error?: string; questionResults?: any; leaderboard?: any; isFinished?: boolean } {
-  const room = rooms.get(code)
+export async function processAdvance(room: GameRoomData): Promise<{ questionResults: any; isFinished: boolean; leaderboard?: any } | null> {
+  return processAdvanceOnRoom(room)
+}
+
+export async function advanceToNextQuestion(code: string, playerId: string): Promise<{ success: boolean; error?: string; questionResults?: any; leaderboard?: any; isFinished?: boolean }> {
+  const room = await getRoomData(code)
   if (!room) return { success: false, error: 'Room not found' }
 
-  const player = room.players.get(playerId)
+  const player = room.players[playerId]
   if (!player) return { success: false, error: 'Player not in room' }
 
   if (room.status !== 'playing') return { success: false, error: 'Game is not in playing state' }
 
-  const result = processAdvance(room)
+  const result = processAdvanceOnRoom(room)
   if (!result) return { success: false, error: 'Could not advance' }
 
+  await setRoomData(room)
   return {
     success: true,
     questionResults: result.questionResults,
@@ -405,93 +476,94 @@ export function advanceToNextQuestion(code: string, playerId: string): { success
 }
 
 /**
- * Continue to the next question from showing-results state.
- * Can be triggered manually or automatically after RESULTS_DISPLAY_MS.
- */
-export function continueToNextQuestion(code: string, playerId: string): { success: boolean; error?: string } {
-  const room = rooms.get(code)
-  if (!room) return { success: false, error: 'Room not found' }
-
-  const player = room.players.get(playerId)
-  if (!player) return { success: false, error: 'Player not in room' }
-
-  if (room.status !== 'showing-results') return { success: false, error: 'Not in showing-results state' }
-
-  // Wait at least RESULTS_DISPLAY_MS before allowing continue
-  if (room.resultsReadyAt && Date.now() - room.resultsReadyAt < RESULTS_DISPLAY_MS) {
-    return { success: false, error: 'Please wait a moment before continuing' }
-  }
-
-  startNextQuestion(room)
-
-  return { success: true }
-}
-
-/**
  * Start the next question — shared logic for auto-continue and manual continue.
  */
-function startNextQuestion(room: GameRoom) {
+function startNextQuestion(room: GameRoomData) {
   room.status = 'playing'
   room.questionStartTime = Date.now()
   room.lastActivity = Date.now()
   room.advanceLock = false
   room.resultsReadyAt = 0
 
-  // Set auto-advance time for the new question
   const nextQ = room.questions[room.currentQuestion]
   room.autoAdvanceAt = Date.now() + (nextQ?.timeLimit || room.timePerQuestion) * 1000
 }
 
-export function updateQuestions(code: string, playerId: string, questions: Question[]): { success: boolean; error?: string } {
-  const room = rooms.get(code)
+export async function continueToNextQuestion(code: string, playerId: string): Promise<{ success: boolean; error?: string }> {
+  const room = await getRoomData(code)
   if (!room) return { success: false, error: 'Room not found' }
 
-  const player = room.players.get(playerId)
+  const player = room.players[playerId]
+  if (!player) return { success: false, error: 'Player not in room' }
+
+  if (room.status !== 'showing-results') return { success: false, error: 'Not in showing-results state' }
+
+  if (room.resultsReadyAt && Date.now() - room.resultsReadyAt < RESULTS_DISPLAY_MS) {
+    return { success: false, error: 'Please wait a moment before continuing' }
+  }
+
+  startNextQuestion(room)
+  await setRoomData(room)
+
+  return { success: true }
+}
+
+export async function updateQuestions(code: string, playerId: string, questions: Question[]): Promise<{ success: boolean; error?: string }> {
+  const room = await getRoomData(code)
+  if (!room) return { success: false, error: 'Room not found' }
+
+  const player = room.players[playerId]
   if (!player || !player.isCreator) return { success: false, error: 'Only the creator can update questions' }
   if (room.status !== 'lobby') return { success: false, error: 'Can only update questions in lobby' }
 
   room.questions = questions.map((q, i) => ({ ...q, order: i }))
   room.lastActivity = Date.now()
 
+  await setRoomData(room)
   return { success: true }
 }
 
 /**
  * THE MAIN GAME STATE FUNCTION — called by player polling every 1.5s.
  * This is the only place where auto-advance and auto-continue are triggered.
- * The TV state route just reads the current state without modifying it.
  */
-export function getGameState(code: string, playerId: string): any {
-  const room = rooms.get(code)
+export async function getGameState(code: string, playerId: string): Promise<any> {
+  const room = await getRoomData(code)
   if (!room) return null
 
-  const player = room.players.get(playerId)
+  const player = room.players[playerId]
   if (!player) return null
 
   // HEARTBEAT: Update player's last poll time
   player.lastPollAt = Date.now()
   room.lastActivity = Date.now()
 
-  // STATE MACHINE TRANSITIONS — only triggered by player polls, not TV polls
+  // STATE MACHINE TRANSITIONS
+  let roomModified = false
 
   if (room.status === 'playing') {
-    // AUTO-ADVANCE: If time has expired, advance to results
     if (room.autoAdvanceAt > 0 && Date.now() >= room.autoAdvanceAt) {
-      processAdvance(room)
-    }
-    // Also check if all connected players have answered (in case autoAdvanceAt wasn't set yet)
-    // This handles the case where checkAllAnswered was called before and set autoAdvanceAt,
-    // but also the edge case where a player disconnects making remaining answers sufficient
-    else {
-      checkAllAnswered(room)
+      processAdvanceOnRoom(room)
+      roomModified = true
+    } else {
+      const wasSet = checkAllAnswered(room)
+      if (wasSet) roomModified = true
     }
   }
 
   if (room.status === 'showing-results') {
-    // AUTO-CONTINUE: If results have been shown long enough, move to next question
     if (room.resultsReadyAt > 0 && Date.now() - room.resultsReadyAt >= RESULTS_DISPLAY_MS) {
       startNextQuestion(room)
+      roomModified = true
     }
+  }
+
+  // Save any state changes back to Redis
+  if (roomModified) {
+    await setRoomData(room)
+  } else {
+    // Still save the heartbeat update
+    await setRoomData(room)
   }
 
   // Build the response based on current state
@@ -503,7 +575,7 @@ export function getGameState(code: string, playerId: string): any {
     code: room.code,
     categoryName: room.categoryName,
     status: room.status,
-    players: getRoomPlayers(code),
+    players: Object.values(room.players),
     totalQuestions: room.questions.length,
     currentQuestionIndex: room.currentQuestion,
     isCreator: player.isCreator,
@@ -519,7 +591,7 @@ export function getGameState(code: string, playerId: string): any {
     if (q) {
       const elapsed = (Date.now() - room.questionStartTime) / 1000
       const timeLeft = Math.max(0, q.timeLimit - elapsed)
-      const hasAnswered = room.answers.has(playerId)
+      const hasAnswered = !!room.answers[playerId]
       const lastAnswer = player.lastAnswer
       const allAnswered = connectedAnswerCount >= connectedCount && connectedCount > 0
 
@@ -550,7 +622,9 @@ export function getGameState(code: string, playerId: string): any {
   if (room.status === 'finished') {
     return {
       ...base,
-      leaderboard: getLeaderboard(code),
+      leaderboard: Object.values(room.players)
+        .sort((a, b) => b.score - a.score)
+        .map((p, i) => ({ ...p, rank: i + 1 })),
       questions: room.questions.map(q => ({
         id: q.id,
         text: q.text,
@@ -571,7 +645,9 @@ export function getGameState(code: string, playerId: string): any {
     return {
       ...base,
       questionResults: room.lastQuestionResults,
-      leaderboard: room.lastQuestionResults?.leaderboard || getLeaderboard(code),
+      leaderboard: room.lastQuestionResults?.leaderboard || Object.values(room.players)
+        .sort((a, b) => b.score - a.score)
+        .map((p, i) => ({ ...p, rank: i + 1 })),
     }
   }
 
@@ -579,98 +655,95 @@ export function getGameState(code: string, playerId: string): any {
 }
 
 // Reconnect a player to their room after page refresh
-export function reconnectPlayer(code: string, playerId: string): { success: boolean; error?: string; gameState?: any } {
-  const room = rooms.get(code)
+export async function reconnectPlayer(code: string, playerId: string): Promise<{ success: boolean; error?: string; gameState?: any }> {
+  const room = await getRoomData(code)
   if (!room) return { success: false, error: 'Room not found' }
 
-  const player = room.players.get(playerId)
+  const player = room.players[playerId]
   if (!player) return { success: false, error: 'Player not found in room' }
 
-  // If player had left (quit), reactivate them
   if (player.leftAt) {
     player.leftAt = 0
-    // Don't clear lastAnswer — they might be reconnecting mid-question
   }
 
-  // Update heartbeat
   player.lastPollAt = Date.now()
   room.lastActivity = Date.now()
 
-  // Return the current game state so the client can restore
-  const gameState = getGameState(code, playerId)
+  await setRoomData(room)
+
+  const gameState = await getGameState(code, playerId)
   return { success: true, gameState }
 }
 
-export function leaveRoom(code: string, playerId: string): { success: boolean; roomDeleted?: boolean; wasCreator?: boolean } {
-  const room = rooms.get(code)
+export async function leaveRoom(code: string, playerId: string): Promise<{ success: boolean; roomDeleted?: boolean; wasCreator?: boolean }> {
+  const room = await getRoomData(code)
   if (!room) return { success: false }
 
-  const player = room.players.get(playerId)
+  const player = room.players[playerId]
   if (!player) return { success: false }
 
   const wasCreator = player.isCreator
 
   if (room.status === 'lobby') {
     // In lobby: fully remove the player
-    room.players.delete(playerId)
+    delete room.players[playerId]
     room.lastActivity = Date.now()
 
-    // If creator leaves in lobby, transfer creator role or delete room
     if (wasCreator) {
-      if (room.players.size > 0) {
-        const newCreator = Array.from(room.players.values())[0]
-        newCreator.isCreator = true
+      const remainingPlayers = Object.values(room.players)
+      if (remainingPlayers.length > 0) {
+        remainingPlayers[0].isCreator = true
         room.lastActivity = Date.now()
+        await setRoomData(room)
         return { success: true, roomDeleted: false, wasCreator: true }
       } else {
-        rooms.delete(code)
+        await deleteRoomData(code)
         return { success: true, roomDeleted: true, wasCreator: true }
       }
     }
 
+    await setRoomData(room)
     return { success: true, roomDeleted: false, wasCreator: false }
   } else {
-    // In game (playing/showing-results): mark player as left but keep them for scoring
+    // In game: mark player as left but keep them for scoring
     player.leftAt = Date.now()
     room.lastActivity = Date.now()
 
-    // If creator leaves mid-game, transfer creator role
     if (wasCreator) {
-      const activePlayers = Array.from(room.players.values()).filter(p => !p.leftAt && p.id !== playerId)
+      const activePlayers = Object.values(room.players).filter(p => !p.leftAt && p.id !== playerId)
       if (activePlayers.length > 0) {
         activePlayers[0].isCreator = true
       }
     }
 
-    // Check if all remaining connected players have answered — if so, trigger auto-advance
     if (room.status === 'playing') {
       checkAllAnswered(room)
 
-      // If no connected players remain, auto-advance immediately
       const connected = getConnectedPlayers(room)
       if (connected.length === 0) {
         room.autoAdvanceAt = Math.min(room.autoAdvanceAt || Infinity, Date.now() + 1000)
       }
     }
 
+    await setRoomData(room)
     return { success: true, roomDeleted: false, wasCreator }
   }
 }
 
 // Rejoin a room after quitting (reactivates the player)
-export function rejoinRoom(code: string, playerId: string): { success: boolean; error?: string; gameState?: any } {
-  const room = rooms.get(code)
+export async function rejoinRoom(code: string, playerId: string): Promise<{ success: boolean; error?: string; gameState?: any }> {
+  const room = await getRoomData(code)
   if (!room) return { success: false, error: 'Room not found. It may have ended.' }
 
-  const player = room.players.get(playerId)
+  const player = room.players[playerId]
   if (!player) return { success: false, error: 'Player not found in this room.' }
 
-  // Reactivate the player
   player.leftAt = 0
   player.lastPollAt = Date.now()
   room.lastActivity = Date.now()
 
-  // Return the current game state
-  const gameState = getGameState(code, playerId)
+  await setRoomData(room)
+
+  const gameState = await getGameState(code, playerId)
   return { success: true, gameState }
 }

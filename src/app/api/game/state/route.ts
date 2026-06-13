@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const state = getGameState(code, playerId)
+    const state = await getGameState(code, playerId)
 
     if (!state) {
       return NextResponse.json({ error: 'Room not found or player not in room' }, { status: 404 })

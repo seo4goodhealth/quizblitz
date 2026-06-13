@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const result = submitAnswer(code, playerId, answer)
+    const result = await submitAnswer(code, playerId, answer)
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 })

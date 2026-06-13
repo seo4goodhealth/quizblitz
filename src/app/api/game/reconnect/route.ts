@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const result = reconnectPlayer(code, playerId)
+    const result = await reconnectPlayer(code, playerId)
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 404 })

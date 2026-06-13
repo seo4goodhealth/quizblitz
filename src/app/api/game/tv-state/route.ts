@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing room code' }, { status: 400 })
     }
 
-    const room = getRoom(code)
+    const room = await getRoom(code)
     if (!room) {
       return NextResponse.json({ error: 'Room not found' }, { status: 404 })
     }
@@ -20,18 +20,15 @@ export async function GET(req: NextRequest) {
     //
     // The only exception: if the TV is the ONLY thing polling (all players disconnected),
     // we need to advance the game so it doesn't get stuck forever.
-    // In that case, we use the same processAdvance function from game-store.
 
     if (room.status === 'playing') {
-      // Check if auto-advance should happen but ONLY if no players are connected
-      // (i.e., the TV is keeping the game alive alone)
       const connected = getConnectedPlayers(room)
       if (connected.length === 0 && room.autoAdvanceAt > 0 && Date.now() >= room.autoAdvanceAt) {
-        processAdvance(room)
+        await processAdvance(room)
       }
     }
 
-    const players = getRoomPlayers(code)
+    const players = await getRoomPlayers(code)
     const connectedPlayers = getConnectedPlayers(room)
     const connectedAnswerCount = getConnectedAnswerCount(room)
 
@@ -74,7 +71,7 @@ export async function GET(req: NextRequest) {
     if (room.status === 'finished') {
       return NextResponse.json({
         ...base,
-        leaderboard: getLeaderboard(code),
+        leaderboard: await getLeaderboard(code),
       })
     }
 

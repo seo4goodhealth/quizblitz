@@ -241,9 +241,11 @@ export default function QuizBlitzApp() {
   const [hallOfFameWeekStart, setHallOfFameWeekStart] = useState('')
   const [hallOfFameWeekEnd, setHallOfFameWeekEnd] = useState('')
 
-  // Ref for answerSubmitted to avoid stale closure in polling
+  // Refs for stale closure avoidance in polling
   const answerSubmittedRef = useRef(false)
   useEffect(() => { answerSubmittedRef.current = answerSubmitted }, [answerSubmitted])
+  const viewRef = useRef<GameView>(view)
+  useEffect(() => { viewRef.current = view }, [view])
 
   // ==================== SESSION PERSISTENCE ====================
   const SESSION_KEY = 'quizblitz_session'
@@ -531,6 +533,11 @@ export default function QuizBlitzApp() {
         setPlayers(data.players || [])
         setGameStatus(data.status)
 
+        // Update isCreator from server (in case of creator transfer)
+        if (data.isCreator !== undefined) {
+          setIsCreator(data.isCreator)
+        }
+
         if (data.status === 'playing' && data.currentQuestion) {
           setCurrentQuestion(prev => {
             if (prev?.id !== data.currentQuestion.id) {
@@ -542,18 +549,17 @@ export default function QuizBlitzApp() {
             return data.currentQuestion
           })
           // Only sync timeLeft from server if we haven't answered yet
-          // After answering, the local timer stops and server time doesn't matter
           if (!answerSubmittedRef.current) {
             setTimeLeft(data.currentQuestion.timeLeft)
           }
           setTotalQuestions(data.currentQuestion.totalQuestions)
           setCurrentQuestionIndex(data.currentQuestion.questionNumber - 1)
-          if (view !== 'game') setView('game')
+          if (viewRef.current !== 'game') setView('game')
         } else if (data.status === 'showing-results') {
           if (data.questionResults) {
             setQuestionResults(data.questionResults)
           }
-          if (view !== 'results') setView('results')
+          if (viewRef.current !== 'results') setView('results')
         } else if (data.status === 'finished') {
           setFinalLeaderboard(data.leaderboard || [])
           // Store questions from the finished game for save feature
@@ -562,7 +568,7 @@ export default function QuizBlitzApp() {
             setGameCategoryName(data.categoryName || '')
             setGameDifficulty(data.difficulty || 'mixed')
           }
-          if (view !== 'leaderboard') setView('leaderboard')
+          if (viewRef.current !== 'leaderboard') setView('leaderboard')
           if (pollRef.current) clearInterval(pollRef.current)
           clearSession()
           // Record game results to Hall of Fame
@@ -572,13 +578,13 @@ export default function QuizBlitzApp() {
             body: JSON.stringify({ code }),
           }).catch(err => console.error('Failed to record game results:', err))
         } else if (data.status === 'lobby') {
-          if (view !== 'lobby') setView('lobby')
+          if (viewRef.current !== 'lobby') setView('lobby')
         }
       } catch (err) {
         console.error('Polling error:', err)
       }
     }, 1500)
-  }, [view, clearSession])
+  }, [clearSession])
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -825,11 +831,21 @@ export default function QuizBlitzApp() {
   const handleStartGame = async () => {
     if (!roomCode || !playerId) return
     try {
-      await fetch('/api/game/start', {
+      const res = await fetch('/api/game/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: roomCode, playerId }),
       })
+      const data = await res.json()
+      if (!data.success) {
+        console.error('Failed to start game:', data.error)
+        // If the room was not found, the game state is stale — force a refresh
+        if (data.error === 'Room not found') {
+          stopPolling()
+          clearSession()
+          setView('home')
+        }
+      }
     } catch (err) {
       console.error('Failed to start game:', err)
     }

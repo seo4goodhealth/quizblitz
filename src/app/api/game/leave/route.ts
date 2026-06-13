@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const result = leaveRoom(code, playerId)
+    const result = await leaveRoom(code, playerId)
     if (!result.success) {
       return NextResponse.json({ error: 'Failed to leave room' }, { status: 400 })
     }

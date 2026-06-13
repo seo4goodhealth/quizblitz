@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Room code is required' }, { status: 400 })
     }
 
-    const room = getRoom(code)
+    const room = await getRoom(code)
     if (!room) {
       return NextResponse.json({ error: 'Room not found' }, { status: 404 })
     }
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Game is not finished yet' }, { status: 400 })
     }
 
-    const leaderboard = getLeaderboard(code)
+    const leaderboard = await getLeaderboard(code)
 
     // Record results for each player
     const results: any[] = []

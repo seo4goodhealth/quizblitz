@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const result = createRoom({ playerName, categoryName, questions, timePerQuestion })
+    const result = await createRoom({ playerName, categoryName, questions, timePerQuestion })
     return NextResponse.json(result)
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
