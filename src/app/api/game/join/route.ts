@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
       categoryName: result.room.categoryName,
       totalQuestions: result.room.questions.length,
       players: Object.values(result.room.players),
+      status: result.room.status,
     })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })

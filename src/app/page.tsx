@@ -819,8 +819,18 @@ export default function QuizBlitzApp() {
         setCategoryName(data.categoryName)
         setTotalQuestions(data.totalQuestions)
         setPlayers(data.players)
+        setRoomCode(data.code)
         saveSession(data.playerId, data.code, false, playerName.trim())
-        setView('lobby')
+
+        // If the game is already in progress, go directly to game view
+        // The polling will sync the exact state (current question, timer, etc.)
+        if (data.status === 'playing' || data.status === 'showing-results') {
+          setGameStatus(data.status)
+          setView('game')
+        } else {
+          setView('lobby')
+        }
+
         startPolling(data.code, data.playerId)
       }
     } catch (err) {

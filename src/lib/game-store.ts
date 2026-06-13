@@ -277,7 +277,7 @@ export async function createRoom(data: {
 export async function joinRoom(code: string, playerName: string): Promise<{ playerId: string; room: GameRoomData } | { error: string }> {
   const room = await getRoomData(code)
   if (!room) return { error: 'Room not found. Check the code and try again.' }
-  if (room.status !== 'lobby') return { error: 'Game already in progress.' }
+  if (room.status === 'finished') return { error: 'Game has already finished.' }
   if (Object.keys(room.players).length >= 50) return { error: 'Room is full (max 50 players).' }
 
   const existingNames = Object.values(room.players).map(p => p.name.toLowerCase())
@@ -295,6 +295,12 @@ export async function joinRoom(code: string, playerName: string): Promise<{ play
     lastPollAt: Date.now(),
   }
   room.lastActivity = Date.now()
+
+  // If game is in progress, check if all connected players have answered
+  // (the new player hasn't answered yet, so this won't trigger auto-advance prematurely)
+  if (room.status === 'playing') {
+    checkAllAnswered(room)
+  }
 
   await setRoomData(room)
   return { playerId, room }
