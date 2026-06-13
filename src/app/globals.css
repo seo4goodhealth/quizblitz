@@ -201,4 +201,13 @@
   animation: tv-glow 2s ease-in-out infinite;
 }
 
+/* Anti-cheat: Disable text selection and touch callout during game play */
+/* Applied via select-none class on game containers, plus these global rules */
+@media (pointer: coarse) {
+  /* Mobile-specific: prevent long-press to select/copy */
+  .select-none {
+    -webkit-touch-callout: none !important;
+    -webkit-user-select: none !important;
+  }
+}
 

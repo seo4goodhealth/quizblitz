@@ -121,6 +121,26 @@ function TVPageContent() {
     return () => clearInterval(timer)
   }, [status, currentQuestion?.id])
 
+  // Anti-cheat: Block keyboard shortcuts during game on TV display too
+  useEffect(() => {
+    if (status !== 'playing' || !currentQuestion) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase()
+      if ((e.ctrlKey || e.metaKey) && ['c', 'f', 'a', 's', 'p', 'u'].includes(key)) {
+        e.preventDefault()
+        return false
+      }
+      if (e.key === 'F3' || ((e.ctrlKey || e.metaKey) && key === 'g')) {
+        e.preventDefault()
+        return false
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [status, currentQuestion?.id])
+
   const timerPercent = currentQuestion ? (timeLeft / currentQuestion.timeLimit) * 100 : 0
   const isLowTime = timeLeft <= 5
 
@@ -339,7 +359,14 @@ function TVPageContent() {
   // Playing - Main question display
   if (status === 'playing' && currentQuestion) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-950 flex flex-col p-6">
+      <div
+        className="min-h-screen bg-gradient-to-br from-gray-950 via-purple-950/40 to-gray-950 flex flex-col p-6 select-none"
+        style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
+        onContextMenu={e => e.preventDefault()}
+        onCopy={e => e.preventDefault()}
+        onCut={e => e.preventDefault()}
+        onDragStart={e => e.preventDefault()}
+      >
         {/* Top bar */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">

@@ -604,6 +604,29 @@ export default function QuizBlitzApp() {
     return () => clearInterval(timer)
   }, [view, currentQuestion?.id, answerSubmitted])
 
+  // Anti-cheat: Block keyboard shortcuts during game (copy, search, select all, find, etc.)
+  useEffect(() => {
+    if (view !== 'game' || !currentQuestion) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Block Ctrl/Cmd + C (copy), F (find), A (select all), S (save/search), P (print)
+      const key = e.key.toLowerCase()
+      if ((e.ctrlKey || e.metaKey) && ['c', 'f', 'a', 's', 'p', 'u'].includes(key)) {
+        e.preventDefault()
+        e.stopPropagation()
+        return false
+      }
+      // Block F3 (search) and Ctrl+G (find next)
+      if (e.key === 'F3' || ((e.ctrlKey || e.metaKey) && key === 'g')) {
+        e.preventDefault()
+        return false
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [view, currentQuestion?.id])
+
   // No more creator-only auto-advance!
   // The server handles auto-advance via polling:
   // - When time expires OR all players answer, the server auto-advances
@@ -1724,7 +1747,14 @@ export default function QuizBlitzApp() {
 
       {/* ====== GAME PLAY VIEW ====== */}
       {view === 'game' && currentQuestion && (
-        <div className="flex-1 flex flex-col p-4 max-w-2xl mx-auto w-full">
+        <div
+          className="flex-1 flex flex-col p-4 max-w-2xl mx-auto w-full select-none"
+          style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', KhtmlUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none' }}
+          onContextMenu={e => e.preventDefault()}
+          onCopy={e => e.preventDefault()}
+          onCut={e => e.preventDefault()}
+          onDragStart={e => e.preventDefault()}
+        >
           <div className="flex items-center justify-between mb-4">
             <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30">
               {currentQuestion.questionNumber} / {currentQuestion.totalQuestions}
