@@ -1915,7 +1915,7 @@ export default function QuizBlitzApp() {
             </div>
           </div>
 
-          {/* Auto-continue countdown — results show for 2 seconds then next question starts automatically */}
+          {/* Auto-continue countdown — results show for 4 seconds then next question starts automatically */}
           <div className="mt-6 text-center">
             <div className="flex items-center justify-center gap-2 text-gray-400">
               <Loader2 className="w-4 h-4 animate-spin" />

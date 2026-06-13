@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRoom, getRoomPlayers, getLeaderboard } from '@/lib/game-store'
+import { getRoom, getRoomPlayers, getLeaderboard, getConnectedPlayers, getConnectedAnswerCount, processAdvance } from '@/lib/game-store'
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,83 +14,26 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Room not found' }, { status: 404 })
     }
 
-    // Trigger auto-advance check (same logic as getGameState)
-    // This ensures the TV display also triggers auto-advance
-    if (room.status === 'playing' && room.autoAdvanceAt > 0 && Date.now() >= room.autoAdvanceAt) {
-      // Process the advance inline
-      if (!room.advanceLock) {
-        room.advanceLock = true
-        try {
-          const question = room.questions[room.currentQuestion]
-          if (question) {
-            const results: any[] = []
-            room.answers.forEach((answerData, pId) => {
-              const p = room.players.get(pId)
-              if (!p) return
-              const isCorrect = answerData.answer === question.correctAnswer
-              let points = 0
-              if (isCorrect) {
-                const timeRatio = Math.max(0, 1 - (answerData.time / (question.timeLimit * 1000)))
-                points = Math.round(500 + timeRatio * 500)
-                p.score += points
-                p.correctAnswers += 1
-              }
-              results.push({ playerId: pId, playerName: p.name, answer: answerData.answer, correct: isCorrect, points })
-            })
-            room.players.forEach((p, pId) => {
-              if (!room.answers.has(pId)) {
-                results.push({ playerId: pId, playerName: p.name, answer: null, correct: false, points: 0, timedOut: true })
-              }
-            })
-            room.lastQuestionResults = {
-              correctAnswer: question.correctAnswer,
-              results,
-              leaderboard: getLeaderboard(code),
-              totalAnswers: room.answers.size,
-              correctCount: results.filter(r => r.correct).length,
-              totalPlayers: room.players.size,
-            }
-            room.currentQuestion += 1
-            room.answers.clear()
-            if (room.currentQuestion >= room.questions.length) {
-              room.status = 'finished'
-            } else {
-              room.status = 'showing-results'
-              room.resultsReadyAt = Date.now()
-            }
-            room.lastActivity = Date.now()
-          }
-        } finally {
-          setTimeout(() => { room.advanceLock = false }, 500)
-        }
+    // IMPORTANT: The TV route does NOT trigger state transitions.
+    // Only player polls (getGameState) advance the game state.
+    // This prevents race conditions and duplicate advances.
+    //
+    // The only exception: if the TV is the ONLY thing polling (all players disconnected),
+    // we need to advance the game so it doesn't get stuck forever.
+    // In that case, we use the same processAdvance function from game-store.
+
+    if (room.status === 'playing') {
+      // Check if auto-advance should happen but ONLY if no players are connected
+      // (i.e., the TV is keeping the game alive alone)
+      const connected = getConnectedPlayers(room)
+      if (connected.length === 0 && room.autoAdvanceAt > 0 && Date.now() >= room.autoAdvanceAt) {
+        processAdvance(room)
       }
     }
 
-    // Auto-continue from showing-results after 2 seconds
-    if (room.status === 'showing-results' && room.resultsReadyAt > 0 && Date.now() - room.resultsReadyAt >= 2000) {
-      room.status = 'playing'
-      room.questionStartTime = Date.now()
-      room.advanceLock = false
-      const nextQ = room.questions[room.currentQuestion]
-      room.autoAdvanceAt = Date.now() + (nextQ?.timeLimit || room.timePerQuestion) * 1000
-      room.resultsReadyAt = 0
-    }
-
     const players = getRoomPlayers(code)
-
-    // Count connected players and their answers (same logic as game-store)
-    const DISCONNECT_TIMEOUT_MS = 15 * 1000
-    const now = Date.now()
-    const connectedPlayers = players.filter(p => {
-      if (p.leftAt) return false
-      if (!p.lastPollAt) return true
-      return (now - p.lastPollAt) < DISCONNECT_TIMEOUT_MS
-    })
-    const connectedIds = new Set(connectedPlayers.map(p => p.id))
-    let connectedAnswerCount = 0
-    room.answers.forEach((_, pId) => {
-      if (connectedIds.has(pId)) connectedAnswerCount++
-    })
+    const connectedPlayers = getConnectedPlayers(room)
+    const connectedAnswerCount = getConnectedAnswerCount(room)
 
     const base = {
       code: room.code,

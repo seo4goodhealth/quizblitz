@@ -1,13 +1,14 @@
 // In-memory game store for server-side game state management
 // This runs on the Next.js server and handles all game logic
 //
-// KEY DESIGN PRINCIPLES (v3):
+// KEY DESIGN PRINCIPLES (v4 — stable):
 // - Each player gets their full time limit to answer independently
 // - Auto-advance when time expires OR all CONNECTED players have answered
-// - Heartbeat tracking: players who don't poll for 15s are considered disconnected
+// - Heartbeat tracking: players who don't poll for 8s are considered disconnected
 // - Disconnected players don't block game flow
 // - No creator-only dependency for game flow
-// - Session persistence via localStorage on client, reconnect API
+// - Single source of truth: processAdvance is the ONLY function that advances state
+// - TV state route must NOT duplicate advance logic
 
 export interface Question {
   id: string
@@ -56,8 +57,15 @@ export interface GameRoom {
   resultsReadyAt: number // timestamp when results became available
 }
 
+// ===== TIMING CONSTANTS =====
 // How long before a player is considered disconnected (no poll)
-const DISCONNECT_TIMEOUT_MS = 15 * 1000 // 15 seconds
+const DISCONNECT_TIMEOUT_MS = 8 * 1000 // 8 seconds — fast enough for quiz pacing
+// How long to wait after all players answer before revealing the answer
+const REVEAL_DELAY_MS = 2000 // 2 seconds — brief suspense
+// How long to show results before auto-continuing to next question
+const RESULTS_DISPLAY_MS = 4000 // 4 seconds — enough time to read with 1.5s polling
+// How long the advanceLock stays active to prevent double-advance
+const ADVANCE_LOCK_MS = 2000 // 2 seconds — generous safety margin
 
 // Global game store - use globalThis to persist across HMR reloads
 const globalForStore = globalThis as any
@@ -98,7 +106,7 @@ function generateRoomCode(): string {
  * 2. Have polled within the disconnect timeout
  * This is the key function that prevents ghost players from blocking the game.
  */
-function getConnectedPlayers(room: GameRoom): Player[] {
+export function getConnectedPlayers(room: GameRoom): Player[] {
   const now = Date.now()
   return Array.from(room.players.values()).filter(p => {
     if (p.leftAt) return false
@@ -112,7 +120,7 @@ function getConnectedPlayers(room: GameRoom): Player[] {
  * Count answers from connected players only.
  * This avoids counting answers from players who left or disconnected.
  */
-function getConnectedAnswerCount(room: GameRoom): number {
+export function getConnectedAnswerCount(room: GameRoom): number {
   const connectedIds = new Set(getConnectedPlayers(room).map(p => p.id))
   let count = 0
   room.answers.forEach((_, pId) => {
@@ -122,21 +130,24 @@ function getConnectedAnswerCount(room: GameRoom): number {
 }
 
 /**
- * Check if all connected players have answered and auto-advance if so.
+ * Check if all connected players have answered and schedule auto-advance if so.
  * Returns true if all connected players have answered.
  */
 function checkAllAnswered(room: GameRoom): boolean {
+  if (room.status !== 'playing') return false
+
   const connected = getConnectedPlayers(room)
   if (connected.length === 0) return false
 
   const connectedAnswerCount = getConnectedAnswerCount(room)
   const allAnswered = connectedAnswerCount >= connected.length
 
-  if (allAnswered && room.status === 'playing') {
-    // All connected players answered! Auto-advance in 2 seconds
-    // Only set if not already set (to avoid resetting the countdown)
-    if (room.autoAdvanceAt === 0 || room.autoAdvanceAt > Date.now() + 2000) {
-      room.autoAdvanceAt = Date.now() + 2000
+  if (allAnswered) {
+    // All connected players answered! Auto-advance after a brief suspense delay
+    // Only set if not already set or if the existing one is further in the future
+    const proposedTime = Date.now() + REVEAL_DELAY_MS
+    if (room.autoAdvanceAt === 0 || room.autoAdvanceAt > proposedTime) {
+      room.autoAdvanceAt = proposedTime
     }
   }
 
@@ -273,14 +284,21 @@ export function submitAnswer(code: string, playerId: string, answer: string): { 
   return { success: true, allAnswered }
 }
 
-// Internal function to process question results and advance
-function processAdvance(room: GameRoom): { questionResults: any; isFinished: boolean; leaderboard?: any } | null {
+/**
+ * THE ONLY function that processes question results and advances the game.
+ * This is the single source of truth — no other code should advance the game state.
+ * Exported so tv-state route can use it instead of duplicating logic.
+ */
+export function processAdvance(room: GameRoom): { questionResults: any; isFinished: boolean; leaderboard?: any } | null {
   if (room.advanceLock) return null
   room.advanceLock = true
 
   try {
     const question = room.questions[room.currentQuestion]
-    if (!question) return null
+    if (!question) {
+      room.advanceLock = false
+      return null
+    }
 
     const results: any[] = []
     room.answers.forEach((answerData, pId) => {
@@ -333,9 +351,15 @@ function processAdvance(room: GameRoom): { questionResults: any; isFinished: boo
     // Store results for players to fetch
     room.lastQuestionResults = questionResults
 
-    // Advance to next question
+    // Clear per-question state
     room.currentQuestion += 1
     room.answers.clear()
+    room.autoAdvanceAt = 0
+
+    // Clear lastAnswer on all players for the new question
+    room.players.forEach(p => {
+      p.lastAnswer = undefined
+    })
 
     if (room.currentQuestion >= room.questions.length) {
       room.status = 'finished'
@@ -355,8 +379,8 @@ function processAdvance(room: GameRoom): { questionResults: any; isFinished: boo
       }
     }
   } finally {
-    // Release lock after a short delay to prevent concurrent advances
-    setTimeout(() => { room.advanceLock = false }, 500)
+    // Release lock after a generous delay to prevent double-advance from concurrent polls
+    setTimeout(() => { room.advanceLock = false }, ADVANCE_LOCK_MS)
   }
 }
 
@@ -364,7 +388,6 @@ export function advanceToNextQuestion(code: string, playerId: string): { success
   const room = rooms.get(code)
   if (!room) return { success: false, error: 'Room not found' }
 
-  // Any player can trigger advance (no creator-only restriction)
   const player = room.players.get(playerId)
   if (!player) return { success: false, error: 'Player not in room' }
 
@@ -381,31 +404,42 @@ export function advanceToNextQuestion(code: string, playerId: string): { success
   }
 }
 
+/**
+ * Continue to the next question from showing-results state.
+ * Can be triggered manually or automatically after RESULTS_DISPLAY_MS.
+ */
 export function continueToNextQuestion(code: string, playerId: string): { success: boolean; error?: string } {
   const room = rooms.get(code)
   if (!room) return { success: false, error: 'Room not found' }
 
-  // Any player can continue (no creator-only restriction)
   const player = room.players.get(playerId)
   if (!player) return { success: false, error: 'Player not in room' }
 
   if (room.status !== 'showing-results') return { success: false, error: 'Not in showing-results state' }
 
-  // Wait at least 2 seconds on results before continuing
-  if (room.resultsReadyAt && Date.now() - room.resultsReadyAt < 2000) {
+  // Wait at least RESULTS_DISPLAY_MS before allowing continue
+  if (room.resultsReadyAt && Date.now() - room.resultsReadyAt < RESULTS_DISPLAY_MS) {
     return { success: false, error: 'Please wait a moment before continuing' }
   }
 
+  startNextQuestion(room)
+
+  return { success: true }
+}
+
+/**
+ * Start the next question — shared logic for auto-continue and manual continue.
+ */
+function startNextQuestion(room: GameRoom) {
   room.status = 'playing'
   room.questionStartTime = Date.now()
   room.lastActivity = Date.now()
   room.advanceLock = false
+  room.resultsReadyAt = 0
 
   // Set auto-advance time for the new question
   const nextQ = room.questions[room.currentQuestion]
   room.autoAdvanceAt = Date.now() + (nextQ?.timeLimit || room.timePerQuestion) * 1000
-
-  return { success: true }
 }
 
 export function updateQuestions(code: string, playerId: string, questions: Question[]): { success: boolean; error?: string } {
@@ -422,6 +456,11 @@ export function updateQuestions(code: string, playerId: string, questions: Quest
   return { success: true }
 }
 
+/**
+ * THE MAIN GAME STATE FUNCTION — called by player polling every 1.5s.
+ * This is the only place where auto-advance and auto-continue are triggered.
+ * The TV state route just reads the current state without modifying it.
+ */
 export function getGameState(code: string, playerId: string): any {
   const room = rooms.get(code)
   if (!room) return null
@@ -433,30 +472,29 @@ export function getGameState(code: string, playerId: string): any {
   player.lastPollAt = Date.now()
   room.lastActivity = Date.now()
 
-  // DISCONNECT CHECK: Mark players as disconnected if they haven't polled recently
-  // This doesn't set leftAt (which is for explicit quits), but we use it for game flow
-  // We detect disconnected players via getConnectedPlayers() instead
+  // STATE MACHINE TRANSITIONS — only triggered by player polls, not TV polls
 
-  // AUTO-ADVANCE CHECK: If time has expired or all players answered, auto-advance
-  if (room.status === 'playing' && room.autoAdvanceAt > 0 && Date.now() >= room.autoAdvanceAt) {
-    processAdvance(room)
-  }
-
-  // Also check if all connected players have answered (in case autoAdvanceAt wasn't set yet)
   if (room.status === 'playing') {
-    checkAllAnswered(room)
+    // AUTO-ADVANCE: If time has expired, advance to results
+    if (room.autoAdvanceAt > 0 && Date.now() >= room.autoAdvanceAt) {
+      processAdvance(room)
+    }
+    // Also check if all connected players have answered (in case autoAdvanceAt wasn't set yet)
+    // This handles the case where checkAllAnswered was called before and set autoAdvanceAt,
+    // but also the edge case where a player disconnects making remaining answers sufficient
+    else {
+      checkAllAnswered(room)
+    }
   }
 
-  // AUTO-CONTINUE CHECK: If showing results for more than 2 seconds, auto-continue
-  if (room.status === 'showing-results' && room.resultsReadyAt > 0 && Date.now() - room.resultsReadyAt >= 2000) {
-    room.status = 'playing'
-    room.questionStartTime = Date.now()
-    room.advanceLock = false
-    const nextQ = room.questions[room.currentQuestion]
-    room.autoAdvanceAt = Date.now() + (nextQ?.timeLimit || room.timePerQuestion) * 1000
-    room.resultsReadyAt = 0
+  if (room.status === 'showing-results') {
+    // AUTO-CONTINUE: If results have been shown long enough, move to next question
+    if (room.resultsReadyAt > 0 && Date.now() - room.resultsReadyAt >= RESULTS_DISPLAY_MS) {
+      startNextQuestion(room)
+    }
   }
 
+  // Build the response based on current state
   const connected = getConnectedPlayers(room)
   const connectedCount = connected.length
   const connectedAnswerCount = getConnectedAnswerCount(room)
@@ -483,7 +521,6 @@ export function getGameState(code: string, playerId: string): any {
       const timeLeft = Math.max(0, q.timeLimit - elapsed)
       const hasAnswered = room.answers.has(playerId)
       const lastAnswer = player.lastAnswer
-
       const allAnswered = connectedAnswerCount >= connectedCount && connectedCount > 0
 
       return {
@@ -496,7 +533,6 @@ export function getGameState(code: string, playerId: string): any {
           optionC: q.optionC,
           optionD: q.optionD,
           // correctAnswer is NOT sent during playing state to prevent cheating
-          // It's only revealed in showing-results state
           timeLimit: q.timeLimit,
           questionNumber: room.currentQuestion + 1,
           totalQuestions: room.questions.length,
@@ -553,7 +589,7 @@ export function reconnectPlayer(code: string, playerId: string): { success: bool
   // If player had left (quit), reactivate them
   if (player.leftAt) {
     player.leftAt = 0
-    player.lastAnswer = undefined
+    // Don't clear lastAnswer — they might be reconnecting mid-question
   }
 
   // Update heartbeat
@@ -582,13 +618,11 @@ export function leaveRoom(code: string, playerId: string): { success: boolean; r
     // If creator leaves in lobby, transfer creator role or delete room
     if (wasCreator) {
       if (room.players.size > 0) {
-        // Transfer creator to the first remaining player
         const newCreator = Array.from(room.players.values())[0]
         newCreator.isCreator = true
         room.lastActivity = Date.now()
         return { success: true, roomDeleted: false, wasCreator: true }
       } else {
-        // No players left, delete room
         rooms.delete(code)
         return { success: true, roomDeleted: true, wasCreator: true }
       }
@@ -615,16 +649,8 @@ export function leaveRoom(code: string, playerId: string): { success: boolean; r
       // If no connected players remain, auto-advance immediately
       const connected = getConnectedPlayers(room)
       if (connected.length === 0) {
-        // Force auto-advance in 1 second
         room.autoAdvanceAt = Math.min(room.autoAdvanceAt || Infinity, Date.now() + 1000)
       }
-    }
-
-    // Check if no active players remain at all
-    const activePlayers = Array.from(room.players.values()).filter(p => !p.leftAt)
-    if (activePlayers.length === 0) {
-      // No active players left — give a short grace then delete room
-      // Don't delete immediately in case someone reconnects
     }
 
     return { success: true, roomDeleted: false, wasCreator }
@@ -640,8 +666,7 @@ export function rejoinRoom(code: string, playerId: string): { success: boolean; 
   if (!player) return { success: false, error: 'Player not found in this room.' }
 
   // Reactivate the player
-  player.leftAt = 0 // Clear the left timestamp
-  player.lastAnswer = undefined
+  player.leftAt = 0
   player.lastPollAt = Date.now()
   room.lastActivity = Date.now()
 
